@@ -1,12 +1,16 @@
-// Command seed fills the database with deterministic sample data.
+// Command seed applies migrations and fills the database with deterministic
+// sample data. It does nothing if users already exist, unless -reset is set.
 package main
 
 import (
 	"context"
+	"flag"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/platform"
+	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/seed"
 )
 
 func main() {
@@ -18,18 +22,46 @@ func main() {
 }
 
 func run(log *slog.Logger) error {
+	reset := flag.Bool("reset", false, "drop all tables and seed from scratch")
+	users := flag.Int("users", seed.DefaultUserCount, "number of random users")
+	rngSeed := flag.Uint64("seed", seed.DefaultSeed, "random seed")
+	flag.Parse()
+
 	cfg, err := platform.Load()
 	if err != nil {
 		return err
 	}
 
-	pool, err := platform.OpenDB(context.Background(), cfg.DatabaseURL)
+	ctx := context.Background()
+	pool, err := platform.OpenDB(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
 
-	// Migrations and seed data are added in PLAN step 3.
-	log.Info("seed: database reachable, nothing to seed yet")
+	if *reset {
+		if err := platform.MigrateReset(ctx, pool); err != nil {
+			return err
+		}
+		log.Info("dropped all tables")
+	}
+	if err := platform.Migrate(ctx, pool); err != nil {
+		return err
+	}
+
+	seeded, err := seed.IsSeeded(ctx, pool)
+	if err != nil {
+		return err
+	}
+	if seeded {
+		log.Info("database already seeded, skipping (use -reset to reseed)")
+		return nil
+	}
+
+	ds := seed.Generate(*rngSeed, *users, time.Now())
+	if err := seed.Insert(ctx, pool, ds); err != nil {
+		return err
+	}
+	log.Info("seeded database", "users", len(ds.Users), "events", len(ds.Events), "seed", *rngSeed)
 	return nil
 }

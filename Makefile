@@ -1,4 +1,4 @@
-.PHONY: test test-unit lint db-up db-down
+.PHONY: test test-unit lint db-up db-down seed seed-reset
 
 BACKEND := backend
 
@@ -22,3 +22,11 @@ db-up:
 
 db-down:
 	docker compose down
+
+# Applies migrations and loads sample data (skipped if already seeded).
+seed: db-up
+	cd $(BACKEND) && go run ./cmd/seed
+
+# Drops all tables and reseeds from scratch.
+seed-reset: db-up
+	cd $(BACKEND) && go run ./cmd/seed -reset

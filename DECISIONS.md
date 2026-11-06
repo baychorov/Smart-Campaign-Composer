@@ -21,6 +21,7 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Gerekçe:** Kampanya durumu ve kuyruk aynı transaction'da yazılır, iki sistem arası tutarlılık sorunu (dual write) olmaz. Kanal başına 100 msg/sn (R-SEND-2) Postgres için hafif bir yük. Claim, lease ve retry kodunun bize ait olması güvenilirlik tasarımını görünür kılar (R-SEND-1).
 - **Alternatifler:** River (Postgres tabanlı Go kuyruğu): job satırları teslimat satırlarını ikiler, kanal limitini yine biz yazarız. Redis/Asynq: outbox gerektirir. RabbitMQ/NATS: altyapı ve öğrenme yükü. Kafka: bu ölçek için fazla.
 - **Sınırlar:** Tek worker replikası varsayılır. Ölçek büyürse broker'a geçiş gerekir.
+- **Güncelleme (2026-11-06, PLAN adım 3):** Migration aracı olarak `goose` (v3) seçildi. Her migration tek bir SQL dosyasında up ve down bölümleriyle durur. Dosyalar `//go:embed` ile binary'ye gömülür ve `cmd/seed` tarafından uygulanır; ayrı bir CLI gerekmez. golang-migrate her migration için iki dosya ister ve gömülü kullanımı daha zahmetlidir. Seed üreticisi "şimdi" zamanını parametre olarak alır: testler sabit bir tarih kullanır, böylece "son N gün" pencereleri kaymaz ve sayılar değişmez.
 
 ## D-SEG: Segment kuralı = ortak koşullar + DNF grupları
 

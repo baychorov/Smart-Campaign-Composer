@@ -16,7 +16,8 @@ internal/
   delivery/     worker, limiter, retry politikası, provider istemcisi
   mockprovider/ HTTP sunucusu, hata enjeksiyonu (iş paketlerini import etmez)
   httpapi/      handler'lar, SSE
-  platform/     config, DB bağlantısı, metrics
+  platform/     config, DB bağlantısı, migration, metrics (pgtest/: entegrasyon testleri için geçici DB)
+  seed/         deterministik örnek veri ve test kohortları
 migrations/
 ```
 
