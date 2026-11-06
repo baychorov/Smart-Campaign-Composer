@@ -12,7 +12,7 @@ Bir adım bitince durumu güncellenir ve kısa bir not düşülür.
 |---|---|---|---|---|
 | 0 | Tasarım | Kararlar `DECISIONS.md`'ye yazıldı | D-5 | ✅ |
 | 1 | Go SDK doğrulaması | Küçük bir deneme programı: Sonnet 5.5 ile `output_config.format`, streaming ve parça birleştirme, `stop_reason` ayrımı. `fallbacks` kapsamdan çıkarıldı (D-MODEL). Bulgular DECISIONS'a (D-LLM-OUT, D-MODEL) eklenir; deneme kodu repoya girmez | R-AI-1 | ✅ |
-| 2 | Repo iskeleti | `go.mod`, `cmd/*` iskeletleri, `docker-compose.yml` (Postgres), `Makefile`, `.env.example` | R-ENV-1, R-ENV-2, D-2 | ⏳ |
+| 2 | Repo iskeleti | `go.mod`, `cmd/*` iskeletleri, `docker-compose.yml` (Postgres), `Makefile`, `.env.example` | R-ENV-1, R-ENV-2, D-2 | ✅ |
 | 3 | DB şeması ve seed | Migration'lar (`users`, `user_events`, `campaigns`, `deliveries`); birkaç bin kullanıcılık sabit RNG seed'li veri. Test için bilerek konmuş kohortlar, D-CART kenar durumu dahil | R-SEED-1 | ⏳ |
 | 4 | `segment` paketi | Kural tipleri, doğrulama, kanonik biçim, SQL derleyici. Birim testleri ve Postgres üzerinde sayı testleri; parantez, izin koşulu ve SQL injection property testleri | R-AUD-1, R-AUD-2 | ⏳ |
 | 5 | `llm` paketi | `Client` interface'i, fake, Anthropic adaptörü, segment çıkarımı ve onarım döngüsü, kontrat testleri (katman 3: sahte SSE sunucusu, bölünmüş `\uXXXX` kaçışı dahil) | R-AI-1, R-AI-2 | ⏳ |
@@ -84,3 +84,4 @@ Puanlama, kuralın seed'de döndürdüğü kullanıcı kümesiyle yapılır (bkz
 <!-- Adım tamamlandığında: tarih, kısa bulgu, varsa DECISIONS'a eklenen güncelleme. -->
 
 - **Adım 1 (2026-11-06):** Geçici bir Go programıyla 2 gerçek API çağrısı yapıldı. Stabil SDK yolu (`anthropic-sdk-go/v2` v2.7.0, `Messages.NewStreaming` + `OutputConfig`) structured output ile streaming'i birlikte destekliyor. Delta birleştirme, `DisallowUnknownFields` ile doğrulama ve `end_turn`/`max_tokens` ayrımı doğrulandı. Case brief'i D-CART'a uygun kurala çevrildi. İlk event gecikmesi yaklaşık 7–8,5 sn. `fallbacks` kullanılmayacak. Ayrıntılar: DECISIONS D-LLM-OUT ve D-MODEL güncellemeleri. Deneme kodu silindi.
+- **Adım 2 (2026-11-06):** Go modülü (`pgx/v5`, `godotenv`), dört `cmd/*` iskeleti ve `internal/platform` (config, DB bağlantısı, ortak HTTP başlatma/kapatma) eklendi. Config yalnızca env değişkenlerinden okunur. Hassas olmayan ayarların varsayılanı `config.go`'dadır, `.env` varsa yüklenir ama tanımlı env'i ezmez. API key `Secret` tipinde tutulur ve slog, JSON ve `fmt` çıktılarında görünmez. Bunu birim testi doğrular; test, redaksiyon bilerek bozulduğunda başarısız olduğu görülerek kontrol edildi. Compose'ta şimdilik yalnızca Postgres 18 var. `make test-unit`, `make test` (DB ping entegrasyon testi dahil) ve `make lint` çalışıyor. Migration aracı seçimi adım 3'e bırakıldı.
