@@ -51,6 +51,13 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - Bunlar `unsupported` listesine kapalı bir sebep kodlarıyla yazılır: `sequence`, `aggregate`, `ranking`, `unknown_field`, `absolute_date`, `scheduling`, `contradiction`, `too_complex`, `off_topic`.
   - İfade edilemeyen bir koşul yalnızca kendi grubundan düşer. Bütün bir grup asla düşürülmez. Boşalan grup `unsupported` sayılır.
   - Tüm gruplar aynı mesajı alır. Gruba özel içerik A/B bonusunun kapsamındadır.
+- **Güncelleme (2026-11-06, PLAN adım 4):**
+  - **Şehir listesi:** Şehir değerleri koddaki 81 il listesiyle karşılaştırılır ve doğru yazıma çevrilir (`IZMIR` → `İzmir`). Karşılaştırma Türkçe harfleri ASCII'ye indiren bir anahtarla yapılır; `strings.ToLower`, `I`/`İ` yüzünden yetersizdir. Listede olmayan bir ad hatadır. Listede olup kullanıcısı olmayan bir il geçerlidir ve kitle 0 olur.
+    - Alternatif: DB'den `SELECT DISTINCT city`. Reddedildi, çünkü "geçerli il ama müşteri yok" ile "böyle bir şehir yok" ayrımını yapamaz. Pazarlamacı için ilki daha doğru bir geri bildirim (kullanıcı kararı).
+  - **Normalizasyon:** Anlamı değiştirmeyen düzeltmeler otomatik yapılır ve her biri bir uyarı olarak kaydedilir: enum büyük/küçük harfi, şehir yazımı, tekrarlanan değer ve koşul, başka bir grubu kapsayan gruptaki fazlalık (A ∨ (A ∧ B) = A), tek grubun `common`'a taşınması. Birebir aynı gruplar hata olarak kalır. Bu düzeltmelerin anlamı değiştirmediği, ham kural ile SQL sonucunun karşılaştırıldığı entegrasyon testiyle doğrulanır.
+  - **Koşul biçimi:** Tek bir düz struct kullanılır: `type` (`attribute` | `event`); attribute için `field`, `op`, `values` (city) veya `value` (age); event için `event`, `occurred` (bool), `within_days`. Hangi alanların dolu olacağını doğrulama zorlar. `unsupported[].group` 0 tabanlıdır.
+  - **Derleme:** Derleyici, kuralı kendisi `Validate`'ten geçirir ve yalnızca `ok`/`partial` kuralları derler. `rejected` veya `unsupported` bir kural asla "herkese gönder"e dönüşmez. "Son N gün" penceresi Go'da `now`'dan hesaplanıp parametre olarak verilir.
+  - **Sınır:** `segment` sorguyu yalnızca üretir. Read-only transaction ve `statement_timeout` ile çalıştırma adım 7'de `campaign` paketinde yapılır.
 
 ## D-PARTIAL: Kısmi kural onayı kilitler
 
