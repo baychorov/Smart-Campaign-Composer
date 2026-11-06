@@ -81,6 +81,17 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - Garantinin üç istisnası var: `stop_reason: refusal`, `stop_reason: max_tokens` ve enum değerlerinin büyük/küçük harfi.
   - Şema `minimum/maximum` ve `minLength/maxLength` kısıtlarını desteklemez; 160 karakter (R-CNT-1), 80 karakter (R-CNT-2) ve sayısal aralıklar backend'de kontrol edilir.
   - Yeni bir şemanın ilk kullanımında derleme gecikmesi olur; derlenen şema 24 saat cache'lenir.
+- **Güncelleme (2026-11-06, PLAN adım 1 doğrulaması):** `claude-sonnet-5-5` ile 2 gerçek çağrı yapıldı. Deneme kodu repoya alınmadı.
+  - **SDK yolu:** `github.com/anthropics/anthropic-sdk-go/v2` v2.7.0. Stabil `client.Messages.NewStreaming` + `OutputConfigParam{Effort, Format: JSONOutputFormatParam{Schema: map[string]any}}` çalışıyor; beta namespace'i veya header'ı gerekmiyor.
+  - **Şema:** `$defs` + `$ref`, `anyOf` (attribute/event koşulu), `["integer","null"]`, enum'lar ve `additionalProperties: false` içeren iki seviyeli şema 400 almadan kabul edildi.
+  - **Event sırası:** `message_start` → `content_block_start(text)` → text delta'ları → `content_block_stop` → `message_delta` → `message_stop`. `effort: low` ile thinking bloğu gelmedi (adaptive thinking düşünmemeyi seçti). Kod yine de thinking bloklarını atlayabilmeli.
+  - **Birleştirme:** Delta'ların art arda eklenmesi `message.Accumulate` sonucuyla birebir aynı. SDK delta'ları geçerli UTF-8 string olarak veriyor (30 delta, 6'sı Türkçe karakterli, 0 geçersiz). Artımlı JSON çıkarıcı için asıl risk byte bölünmesi değil, JSON metni olarak gelen bir `\uXXXX` kaçışının ya da `\"` dizisinin iki delta'ya bölünmesi. Bu durum D-LLM-MOCK testlerine eklenir.
+  - **Doğrulama:** Case brief'inin çıktısı `DisallowUnknownFields` ile tipli struct'a hatasız çevrildi. Sonuç D-CART ile birebir aynı: `add_to_cart✓30g`, `purchase✗30g`, `city∈[İstanbul]`. Ton ve indirim `unsupported`'a değil `notes`'a yazıldı.
+  - **`max_tokens`:** `max_tokens=40` ile `stop_reason: max_tokens` döndü ve yarım JSON geçersizdi (`json.Valid=false`). D-LLM-RETRY'daki "parse etme" kuralı doğrulandı.
+  - **Token:** Input 1635 token (kısa system prompt + brief; büyük kısmı şemanın getirdiği ek yük), output 185 token.
+  - **Gecikme:** İlk event iki çağrıda da yaklaşık 7–8,5 sn sonra geldi. `message_start` ilk text delta ile aynı anda geliyor. Aynı şemayla yapılan ikinci çağrı daha hızlı değildi, yani şema cache'inin etkisi bu örneklemde görülmedi. Sonuç: Backend `started` olayını Claude'un ilk event'ini beklemeden kendisi gönderir, arayüz bu sürede "hazırlanıyor" durumu gösterir (D-STREAM).
+  - **Refusal:** Tetiklenmedi (bilerek denenmedi). `StopReasonRefusal` sabiti ve `StopDetails{Category, Explanation}` alanları derleme ile doğrulandı. Davranış fake ile test edilecek.
+  - **Hata:** `*anthropic.Error` mesajı metot, URL, status ve request-id içeriyor; API key içermiyor. Ayrıntı `RawJSON()` ile alınır.
 
 ## D-LLM-RETRY: LLM hata ve onarım stratejisi
 
@@ -101,6 +112,7 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Gerekçe:** Bu iş kısa yapılandırılmış çıkarım ve kısa metin üretimi; Sonnet 5.5 bunun için maliyet ve kalite dengesi sunar. Seçim kullanıcının kararıdır.
 - **Alternatifler:** `claude-opus-5-5`: daha yetenekli ama iki kat pahalı. `claude-haiku-5-5`: çok ucuz ama daha fazla onarım denemesi riski var.
 - **Sınırlar:** Kalite `make eval` ile ölçülür. Model değişirse eval tekrar çalıştırılır.
+- **Güncelleme (2026-11-06):** `fallbacks: "default"` kullanılmayacak (kullanıcı kararı). Refusal nadir bir durum; olduğunda D-LLM-RETRY'daki gibi parse edilmeden kullanıcıya gösterilir. Böylece beta API yüzeyine bağımlılık kalmaz ve stabil `client.Messages` yolu yeterli olur. `thinking` gönderilmeden `effort: low` ile segment çıkarımı doğru sonuç verdi (bkz. D-LLM-OUT güncellemesi).
 
 ## D-LLM-MOCK: Test edilebilir LLM katmanı
 
@@ -112,6 +124,7 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Gerekçe:** R-AI-2'nin gereği. Hata senaryoları (geçersiz JSON, `refusal`, `max_tokens`, stream ortasında kesilme, çok baytlı karakterin ortasından bölünen chunk) deterministik olarak kurulabilir.
 - **Alternatifler:** Kayıt/tekrar (cassette): kayıt için key gerekir ve kayıtlar eskir. Compose içinde ayrı bir mock LLM servisi: testler için fazla ağır.
 - **Sınırlar:** Gerçek model davranışı yalnızca `make eval` ile ölçülür; `make test` gerçek API'ye hiç bağımlı değildir.
+- **Güncelleme (2026-11-06):** Kontrat testlerinin gerçek API ile çapraz kontrolü için `make test-live` eklendi (bkz. D-TEST güncellemesi). `make test` yine gerçek API'ye bağımlı değildir.
 
 ## D-STREAM: Frontend'e akış
 
@@ -197,6 +210,7 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Karar:** Vue 3 (Composition API), Vite ve TypeScript. SSE bağlantısı bir composable içinde (`useEventStream`) tutulur. Arayüz ve içerik dili Türkçedir.
 - **Gerekçe:** TypeScript, SSE olaylarının ve kural şemasının tiplerini korur.
 - **Sınırlar:** Kimlik doğrulama yok; tek kullanıcı varsayılır ve README'de belirtilir.
+- **Güncelleme (2026-11-06):** Frontend testleri Vitest ile yazılır (Vite ile aynı yapılandırmayı kullanır) ve `make test`'e dahildir (bkz. D-TEST).
 
 ## D-TEST: Test yaklaşımı (D-3)
 
@@ -205,6 +219,31 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - `make eval` gerçek API'yi kullanır ve isteğe bağlıdır. `docs/PLAN.md`'deki 20 brief her biri 3 kez çalıştırılır. Puanlama yapısal karşılaştırmayla değil, kuralın sabit seed'de döndürdüğü kullanıcı kümesinin beklenen kümeyle karşılaştırılmasıyla yapılır. Doğruluk ve tutarlılık ayrı ayrı raporlanır.
 - **Gerekçe:** Aynı kitle farklı yapılarla yazılabilir (ör. iki grup ya da tek grupta `in`). Küme karşılaştırması bu farkları doğru biçimde eşit sayar.
 - **Sınırlar:** Eval sonuçları her çalıştırmada değişebilir; rapora tarih ve model yazılır.
+- **Güncelleme (2026-11-06): Beş test katmanı.** Yukarıdaki iki türlü ayrımın yerini aşağıdaki yapı alır. `make eval` kararı ve küme karşılaştırmasıyla puanlama aynen geçerlidir.
+  - **Katmanlar:**
+
+    | # | Katman | Kapsam | Gerektirir |
+    |---|---|---|---|
+    | 1 | Birim | Saf mantık: segment doğrulama ve SQL derleme, içerik kuralları (rune sayımı, en kötü durum render, değişken beyaz listesi), retry politikası, limiter | Hiçbir şey |
+    | 2 | Entegrasyon | Gerçek Postgres: seed üzerinde beklenen kişi sayıları (D-CART kohortu dahil), `UNIQUE(campaign_id, user_id, channel)`, `SKIP LOCKED` claim ve lease | Docker |
+    | 3 | LLM | Fake `llm.Client` ve `httptest` ile kurulan sahte SSE sunucusu: bozuk JSON, onarım döngüsü, `max_tokens`, `refusal`, stream ortasında kopma, iki delta'ya bölünen `\uXXXX` kaçışı | Hiçbir şey |
+    | 4 | Uçtan uca gönderim | Worker + mock provider + Postgres: tam bir kez teslim (worker gönderim ortasında öldürülüp yeniden başlatılır), herhangi bir 1 saniyelik pencerede kanal başına en fazla 100 istek | Docker |
+    | 5 | Canlı | Gerçek API. `make test`'e dahil değildir | API key, ücretli |
+
+  - **Make hedefleri:**
+    - `make test`: katman 1–4 ve frontend testleri (Vitest). Docker gerekir, key gerekmez.
+    - `make test-unit`: katman 1 ve 3. Docker ve key gerekmez; geliştirme sırasında hızlı geri bildirim için.
+    - `make test-live`: PLAN adım 1'deki SDK doğrulamasının kalıcı hâli (aşağıda).
+    - `make eval`: 20 brief × 3 çalıştırma (yukarıdaki karar).
+  - **Ayrım Go build tag ile yapılır:** Katman 2 ve 4 dosyaları `//go:build integration`, katman 5 dosyaları `//go:build live` satırıyla başlar. Tag'siz `go test ./...` yalnızca katman 1 ve 3'ü derler ve çalıştırır. Böylece Docker'ı veya key'i olmayan biri ağır ya da ücretli bir testi yanlışlıkla çalıştıramaz.
+  - **`make test-live`:** Anthropic adaptörü üzerinden en fazla 2 çağrı yapılır, SDK'nın otomatik retry'ı kapalıdır.
+    1. Segment şemasıyla streaming: `end_turn` beklenir; çıktı sıkı decode ve semantik doğrulamadan geçer.
+    2. Çok düşük `max_tokens`: `max_tokens` dalına girilir ve çıktı parse edilmez.
+    - Key `.env`'den config yükleyicisiyle okunur ve hiçbir çıktıya yazılmaz. Key yoksa test açık bir mesajla başarısız olur; komut açıkça çağrıldığı için sessizce atlanmaz.
+    - Amaç SDK, API veya model değiştiğinde adaptör kontratının bozulmadığını görmektir. Model kalitesini ölçmez; kaliteyi `make eval` ölçer.
+  - **İlke:** Her metot değil, her paketin dışa açık davranışı test edilir. Öncelik riskli alanlardadır: yanlış kişiye gönderim (izin filtresi, grup parantezleri, kitle snapshot'ı), çift gönderim (D-DEDUP katmanları), SQL güvenliği (LLM'den gelen metnin SQL'e girmemesi) ve karakter limitleri (rune, en kötü durum).
+  - **Gerekçe:** Katmanlar ihtiyaç duydukları altyapıya göre ayrılır; en sık çalışan katman en hızlı olanıdır. Canlı test, sahte SSE sunucusunun gerçek API'den uzaklaşıp uzaklaşmadığını kontrol eder; bunu katman 3 tek başına göremez.
+  - **Sınırlar:** `refusal` canlı olarak tetiklenmez, yalnızca katman 3'te test edilir. Canlı testler ve eval CI'da çalışmaz.
 
 ## D-LANG: Dil kuralı
 

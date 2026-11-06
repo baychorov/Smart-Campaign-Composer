@@ -11,18 +11,19 @@ Bir adım bitince durumu güncellenir ve kısa bir not düşülür.
 | # | Adım | Kapsam | Gereksinim | Durum |
 |---|---|---|---|---|
 | 0 | Tasarım | Kararlar `DECISIONS.md`'ye yazıldı | D-5 | ✅ |
-| 1 | Go SDK doğrulaması | Küçük bir deneme programı: Sonnet 5.5 ile `output_config.format`, streaming ve parça birleştirme, `stop_reason` ayrımı ve `fallbacks: "default"` desteği. Bulgular DECISIONS'a (D-LLM-OUT, D-MODEL) eklenir; deneme kodu repoya girmez | R-AI-1 | ⏳ |
+| 1 | Go SDK doğrulaması | Küçük bir deneme programı: Sonnet 5.5 ile `output_config.format`, streaming ve parça birleştirme, `stop_reason` ayrımı. `fallbacks` kapsamdan çıkarıldı (D-MODEL). Bulgular DECISIONS'a (D-LLM-OUT, D-MODEL) eklenir; deneme kodu repoya girmez | R-AI-1 | ✅ |
 | 2 | Repo iskeleti | `go.mod`, `cmd/*` iskeletleri, `docker-compose.yml` (Postgres), `Makefile`, `.env.example` | R-ENV-1, R-ENV-2, D-2 | ⏳ |
 | 3 | DB şeması ve seed | Migration'lar (`users`, `user_events`, `campaigns`, `deliveries`); birkaç bin kullanıcılık sabit RNG seed'li veri. Test için bilerek konmuş kohortlar, D-CART kenar durumu dahil | R-SEED-1 | ⏳ |
 | 4 | `segment` paketi | Kural tipleri, doğrulama, kanonik biçim, SQL derleyici. Birim testleri ve Postgres üzerinde sayı testleri; parantez, izin koşulu ve SQL injection property testleri | R-AUD-1, R-AUD-2 | ⏳ |
-| 5 | `llm` paketi | `Client` interface'i, fake, Anthropic adaptörü, segment çıkarımı ve onarım döngüsü, kontrat testleri | R-AI-1, R-AI-2 | ⏳ |
+| 5 | `llm` paketi | `Client` interface'i, fake, Anthropic adaptörü, segment çıkarımı ve onarım döngüsü, kontrat testleri (katman 3: sahte SSE sunucusu, bölünmüş `\uXXXX` kaçışı dahil) | R-AI-1, R-AI-2 | ⏳ |
+| 5b | `make test-live` | Adım 1 doğrulamasının kalıcı hâli: Anthropic adaptörü üzerinden en fazla 2 gerçek çağrı (`end_turn` + sıkı doğrulama, `max_tokens` dalı), `//go:build live`. Çalıştırmak için kullanıcı onayı gerekir (D-TEST) | R-AI-1 | ⏳ |
 | 6 | `content` paketi ve üretim akışı | Mesaj şeması, rune ile sayım, değişkenler için en kötü durum doğrulaması, artımlı JSON çıkarıcı, SSE ile üretim endpoint'i | R-CNT-1..3 | ⏳ |
 | 7 | `campaign` paketi | Durum makinesi, `partial` onayı, kanal seçimi, onay anında snapshot (`deliveries`), HTTP API | R-AUD-2, R-SEND-3 | ⏳ |
 | 8 | Mock provider | Hata, gecikme ve 429 enjeksiyonu; kayan pencere limiti; idempotency anahtarları; istatistik endpoint'i | R-MOCK-1, R-MOCK-2 | ⏳ |
 | 9 | `delivery` worker | Claim ve lease, retry/backoff, kanal başına limiter, izin tekrar kontrolü. Worker'ı öldürüp yeniden başlatan test | R-SEND-1..4 | ⏳ |
 | 10 | Gözlemlenebilirlik | `/metrics`, `/healthz`, `/readyz`, dashboard SSE akışı | R-OBS-1..3 | ⏳ |
 | 11 | Frontend | Brief formu → kural kartları ve sayılar → içerik akışı ve düzenleme → onay (kanal checkbox'ları, `partial` onayı) → dashboard | Bölüm 3 | ⏳ |
-| 12 | Uçtan uca | `docker compose up` ile tek komutta kurulum; `make test` | D-2, D-3 | ⏳ |
+| 12 | Uçtan uca | `docker compose up` ile tek komutta kurulum; `make test` (katman 1–4 + frontend) ve `make test-unit` hedefleri | D-2, D-3 | ⏳ |
 | 13 | Eval | `make eval`: 20 brief × 3 çalıştırma, doğruluk ve tutarlılık raporu | R-AI-1 | ⏳ |
 | 14 | Teslim | README (kurulum ve mimari özeti), DECISIONS son hali, yetişmeyenlerin listesi, `ai-sessions/` export'ları (API key ve kişisel bilgiler temizlenmiş) | D-1, D-4..6 | ⏳ |
 | 15 | Bonus (opsiyonel) | Zamanlanmış gönderim, A/B, dile göre içerik, CI | Bölüm 9 | ⏳ |
@@ -81,3 +82,5 @@ Puanlama, kuralın seed'de döndürdüğü kullanıcı kümesiyle yapılır (bkz
 ## Notlar
 
 <!-- Adım tamamlandığında: tarih, kısa bulgu, varsa DECISIONS'a eklenen güncelleme. -->
+
+- **Adım 1 (2026-11-06):** Geçici bir Go programıyla 2 gerçek API çağrısı yapıldı. Stabil SDK yolu (`anthropic-sdk-go/v2` v2.7.0, `Messages.NewStreaming` + `OutputConfig`) structured output ile streaming'i birlikte destekliyor. Delta birleştirme, `DisallowUnknownFields` ile doğrulama ve `end_turn`/`max_tokens` ayrımı doğrulandı. Case brief'i D-CART'a uygun kurala çevrildi. İlk event gecikmesi yaklaşık 7–8,5 sn. `fallbacks` kullanılmayacak. Ayrıntılar: DECISIONS D-LLM-OUT ve D-MODEL güncellemeleri. Deneme kodu silindi.
