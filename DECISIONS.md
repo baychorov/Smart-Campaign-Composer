@@ -22,6 +22,7 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Alternatifler:** River (Postgres tabanlı Go kuyruğu): job satırları teslimat satırlarını ikiler, kanal limitini yine biz yazarız. Redis/Asynq: outbox gerektirir. RabbitMQ/NATS: altyapı ve öğrenme yükü. Kafka: bu ölçek için fazla.
 - **Sınırlar:** Tek worker replikası varsayılır. Ölçek büyürse broker'a geçiş gerekir.
 - **Güncelleme (2026-11-06, PLAN adım 3):** Migration aracı olarak `goose` (v3) seçildi. Her migration tek bir SQL dosyasında up ve down bölümleriyle durur. Dosyalar `//go:embed` ile binary'ye gömülür ve `cmd/seed` tarafından uygulanır; ayrı bir CLI gerekmez. golang-migrate her migration için iki dosya ister ve gömülü kullanımı daha zahmetlidir. Seed üreticisi "şimdi" zamanını parametre olarak alır: testler sabit bir tarih kullanır, böylece "son N gün" pencereleri kaymaz ve sayılar değişmez.
+- **Güncelleme (2026-11-07, PLAN adım 9):** Claim tek bir sorgudur: `pending` ve zamanı gelmiş satırlar ile lease süresi dolmuş `sending` satırları `FOR UPDATE SKIP LOCKED` ile seçilir, `sending` yapılır ve `attempts` 1 artırılır. Aynı sorgu kullanıcının izin durumunu, telefon/email'ini ve kampanya metnini de döner. Kampanyanın ilk satırı alındığında kampanya aynı transaction'da `approved → sending` olur. Açık satırı kalmayan kampanyalar, worker boşta kaldığında `completed` yapılır.
 
 ## D-SEG: Segment kuralı = ortak koşullar + DNF grupları
 
@@ -215,6 +216,12 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - Onay tek bir transaction'dır: önce `UPDATE campaigns ... WHERE id=$1 AND status='draft' RETURNING ...` satırı kilitler; ardından kontroller, kanal başına `INSERT INTO deliveries ... SELECT` (kitle SQL'i `segment.CompileAudience`'tan gelir, izin filtresi dahil) ve snapshot üzerinde içerik kontrolü yapılır. Herhangi bir kontrol başarısız olursa her şey geri alınır.
   - Eşzamanlı ikinci onay, kilidin açılmasını bekler, koşul artık tutmadığı için 0 satır günceller ve `409 not_draft` alır.
   - Test: aynı taslak 8 paralel istekle onaylandı; tam olarak biri başarılı oldu, snapshot bir kez yazıldı. `status='draft'` koşulu bilerek kaldırılınca test kırıldı; bu durumda bile ikinci snapshot'ı unique kısıt engelledi.
+- **Güncelleme (2026-11-07, PLAN adım 9):** Katman 3 ve 4 uygulandı (`internal/delivery`).
+  - Idempotency key delivery id'nin kendisidir.
+  - **Fence:** Sonuç yalnızca satır hâlâ `sending` ise ve `attempts` claim'deki değerle aynıysa yazılır. Lease'i dolmuş yavaş bir worker, satırı yeniden almış başka bir worker'ın sonucunu ezemez.
+  - **Sonuç yazılamazsa:** Gönderim yapılmış ama DB'ye yazılamamışsa satır `sending` kalır. Lease dolunca aynı anahtarla tekrar gönderilir ve provider ilk yanıtı döner.
+  - **Test (katman 4):** Worker, bir gönderimden hemen sonra ve sonucu yazmadan önce "çöktürülür" (süreç içi simülasyon: sonraki tüm DB yazımları başarısız olur). Bu sırada 10 mesaj teslim edilmiş ama kaydedilmemiştir. İkinci worker kuyruğu bitirir. Mock'taki teslim sayısı DB'deki `sent` sayısına eşittir. Anahtar her denemede değiştirilince test kırıldı.
+  - **Elle doğrulama:** Gerçek süreçlerle `kill -9` da denendi.
 
 ## D-RETRY: Gönderim retry stratejisi (R-SEND-4)
 
@@ -230,6 +237,12 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Gerekçe:** Süreç düşse de retry durumu korunur. Jitter, aynı anda başarısız olan mesajların aynı anda geri dönüp yeni bir yığılma yaratmasını önler.
 - **Alternatifler:** Bellekte `Sleep` ile beklemek: süreç düşünce durum kaybolur. Broker'ın dead-letter queue'su: D-DB kararıyla elendi.
 - **Sınırlar:** Manuel "tekrar gönder" butonu çekirdek kapsamda yok.
+- **Güncelleme (2026-11-07, PLAN adım 9):**
+  - **429 sayacı:** `deliveries.throttles` kolonu eklendi (migration 00002). 429 bir deneme hakkı harcamaz; en fazla 20 kez kabul edilir. Retry-After en fazla 5 dk kabul edilir.
+  - **Deneme sayımı:** Claim bir deneme sayılır. Böylece çökmeyle yarıda kalan bir deneme de sayıya girer.
+  - **Retry edilen ek kodlar:** `408` ve `409` da retry edilir. `409`, provider'ın "bu anahtarla bir istek hâlâ işleniyor" yanıtıdır; genelde çökmeden kalan kendi isteğimizdir ve sonucu sonraki denemede idempotency ile alınır.
+  - **Kapanış:** Düzgün kapanışta, alınmış ama henüz gönderilmemiş satırlar deneme hakkı harcamadan hemen `pending`'e döner. Başlamış istekler tamamlanır ve sonuçları yazılır.
+  - **`last_error`:** Yalnızca durum kodu veya hata sınıfı (`http 503`, `timeout`) içerir; kişisel veri içermez.
 
 ## D-RATE: Kanal başına 100 msg/sn (R-SEND-2)
 
@@ -238,6 +251,10 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Alternatifler:** Redis veya DB tabanlı dağıtık limiter: çoklu worker için doğru, ama şu an gereksiz altyapı. Sabit pencere sayacı: pencere sınırında limitin iki katına çıkabilir.
 - **Sınırlar:** Tek worker replikası varsayılır. Doğrulama mock provider'ın kayan pencere sayacıyla yapılır: herhangi bir 1 saniyelik pencerede en fazla 100 istek.
 - **Güncelleme (2026-11-07, PLAN adım 8):** Mock'un penceresi `(now-1s, now]` aralığıdır ve reddedilen istekler dahil **gelen her isteği** sayar. `/stats` içindeki `max_per_second`, istemcinin herhangi bir 1 saniyelik aralıkta gönderdiği en fazla isteği gösterir; 9. adımdaki test bunun ≤ 100 olduğunu kontrol eder. Sabit saniye sayacının sınırda 2 katına çıkma sorunu testle gösterildi: 0,9 sn'de 3, 1,1 sn'de 3 istek; kayan pencere ikinci grubu reddeder.
+- **Güncelleme (2026-11-07, PLAN adım 9):** Worker'ın varsayılan hızı kanal başına **95 msg/sn**'dir (`WORKER_SEND_RATE`).
+  - Limiter tam 100'e ayarlanırsa istekler arası süre tam 10 ms olur. Bu durumda ağdaki birkaç ms'lik oynama, mock tarafında 1 saniyelik bir pencereye 101 istek düşmesine yetebilir.
+  - %5 pay, gereksinimi (provider tarafında saniyede en fazla 100) her koşulda sağlar.
+  - Ölçüm: uçtan uca testte ve elle denemede `max_per_second` 96–97, `rate_limited` 0. Limiter kaldırılınca saniyede 952 istek görüldü ve testler kırıldı.
 
 ## D-MOCK: Mock provider (R-MOCK-1, R-MOCK-2)
 

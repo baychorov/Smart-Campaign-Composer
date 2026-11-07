@@ -20,7 +20,7 @@ Bir adım bitince durumu güncellenir ve kısa bir not düşülür.
 | 6 | `content` paketi ve üretim akışı | Mesaj şeması, rune ile sayım, değişkenler için en kötü durum doğrulaması, artımlı JSON çıkarıcı, SSE ile üretim endpoint'i | R-CNT-1..3 | ✅ |
 | 7 | `campaign` paketi | Durum makinesi, `partial` onayı, kanal seçimi, onay anında snapshot (`deliveries`), HTTP API | R-AUD-2, R-SEND-3 | ✅ |
 | 8 | Mock provider | Hata, gecikme ve 429 enjeksiyonu; kayan pencere limiti; idempotency anahtarları; istatistik endpoint'i | R-MOCK-1, R-MOCK-2 | ✅ |
-| 9 | `delivery` worker | Claim ve lease, retry/backoff, kanal başına limiter, izin tekrar kontrolü. Worker'ı öldürüp yeniden başlatan test | R-SEND-1..4 | ⏳ |
+| 9 | `delivery` worker | Claim ve lease, retry/backoff, kanal başına limiter, izin tekrar kontrolü. Worker'ı öldürüp yeniden başlatan test | R-SEND-1..4 | ✅ |
 | 10 | Gözlemlenebilirlik | `/metrics`, `/healthz`, `/readyz`, dashboard SSE akışı | R-OBS-1..3 | ⏳ |
 | 11 | Frontend | Brief formu → kural kartları ve sayılar → içerik akışı ve düzenleme → onay (kanal checkbox'ları, `partial` onayı) → dashboard | Bölüm 3 | ⏳ |
 | 12 | Uçtan uca | `docker compose up` ile tek komutta kurulum; `make test` (katman 1–4 + frontend) ve `make test-unit` hedefleri | D-2, D-3 | ⏳ |
@@ -174,3 +174,38 @@ Puanlama, kuralın seed'de döndürdüğü kullanıcı kümesiyle yapılır (bkz
     - Pencere yalnızca kabul edilenleri sayınca 2 test kırıldı.
   - Binary ile `curl` duman testi yapıldı: aynı anahtar aynı `message_id`'yi döndü. 150 paralel istekte pencerede 100 kabul, 52 `429` oldu. Logda telefon numarası yok.
   - `docker-compose.yml`'ye ekleme 12. adımda yapılacak.
+- **Adım 9 (2026-11-07):** `internal/delivery` paketi ve `cmd/worker` eklendi. Migration 00002 (`deliveries.throttles`) var; dev veritabanında `make seed` ile uygulanır.
+  - **Bileşenler:**
+    - `Store` (Postgres: claim + lease, attempts ile fence, kampanya durumu).
+    - `Provider` (HTTP, `Idempotency-Key`).
+    - Saf retry politikası (D-RETRY tablosu, full jitter).
+    - Kanal başına dispatcher, gönderici havuzu ve `x/time/rate` limiter (95/sn, burst 1).
+    - Düzgün kapanış.
+  - **Ayarlar:** `PROVIDER_URL`, `WORKER_SEND_RATE`, `WORKER_CONCURRENCY`, `WORKER_LEASE`. Ayrıntılar: DECISIONS D-DB, D-DEDUP, D-RETRY, D-RATE.
+  - **Testler:**
+    - Katman 1 (`synctest` ile sahte saat):
+      - Retry tablosu, backoff sınırları, `Retry-After` ayrıştırma ve şablon render'ı.
+      - 100/sn'de hiçbir pencerede 100'ü aşmama; kanalların paralel çalışması.
+      - Her yanıt türünün doğru duruma gitmesi.
+      - Düzgün kapanış.
+      - Kaydedilemeyen gönderimin lease sonrası aynı anahtarla tekrar gönderilmesi.
+    - Katman 2:
+      - 6 paralel claim'de aynı satırın iki kez alınmaması.
+      - Lease süresi ve fence.
+      - Tüm sonuç türleri.
+      - İzin geri çekilmesinin claim'de görülmesi.
+      - Kampanyanın tamamlanması.
+    - Katman 4: Gerçek mock provider (hatalar açık) + Postgres + worker, gönderim ortasında "çökme" ve yeniden başlatma.
+      - Mock teslim sayısı = DB `sent` sayısı.
+      - `max_per_second` 96.
+      - İzni geri çekilen 5 kişi `skipped`.
+  - **Bilerek bozma:** Dört test bilerek bozuldu, dördü de kırıldı:
+    - Her denemede yeni anahtar → çift teslim.
+    - Limiter kaldırma → saniyede 952 istek.
+    - Fence kaldırma.
+    - İzin kontrolünü kaldırma.
+  - **Elle duman testi:** Gerçek binary'lerle, 7534 mesajlık "tüm kullanıcılar" kampanyası.
+    - Worker 8. saniyede `kill -9` ile öldürüldü; 89 satır `sending`'de kaldı.
+    - Yeniden başlatılınca kampanya `completed` oldu: SMS 3521, email 4013. Mock teslim sayıları birebir aynıydı, `max_per_second` 96/97.
+    - Bu denemede öldürme anında "teslim edildi ama kaydedilmedi" durumu oluşmadı; bu durum katman 4 testinde deterministik olarak üretiliyor.
+    - Test kampanyası sonra silindi.
