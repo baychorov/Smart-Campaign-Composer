@@ -21,7 +21,7 @@ Bir adım bitince durumu güncellenir ve kısa bir not düşülür.
 | 7 | `campaign` paketi | Durum makinesi, `partial` onayı, kanal seçimi, onay anında snapshot (`deliveries`), HTTP API | R-AUD-2, R-SEND-3 | ✅ |
 | 8 | Mock provider | Hata, gecikme ve 429 enjeksiyonu; kayan pencere limiti; idempotency anahtarları; istatistik endpoint'i | R-MOCK-1, R-MOCK-2 | ✅ |
 | 9 | `delivery` worker | Claim ve lease, retry/backoff, kanal başına limiter, izin tekrar kontrolü. Worker'ı öldürüp yeniden başlatan test | R-SEND-1..4 | ✅ |
-| 10 | Gözlemlenebilirlik | `/metrics`, `/healthz`, `/readyz`, dashboard SSE akışı | R-OBS-1..3 | ⏳ |
+| 10 | Gözlemlenebilirlik | `/metrics`, `/healthz`, `/readyz`, dashboard SSE akışı | R-OBS-1..3 | ✅ |
 | 11 | Frontend | Brief formu → kural kartları ve sayılar → içerik akışı ve düzenleme → onay (kanal checkbox'ları, `partial` onayı) → dashboard | Bölüm 3 | ⏳ |
 | 12 | Uçtan uca | `docker compose up` ile tek komutta kurulum; `make test` (katman 1–4 + frontend) ve `make test-unit` hedefleri | D-2, D-3 | ⏳ |
 | 13 | Eval | `make eval`: 20 brief × 3 çalıştırma, doğruluk ve tutarlılık raporu | R-AI-1 | ⏳ |
@@ -208,4 +208,28 @@ Puanlama, kuralın seed'de döndürdüğü kullanıcı kümesiyle yapılır (bkz
     - Worker 8. saniyede `kill -9` ile öldürüldü; 89 satır `sending`'de kaldı.
     - Yeniden başlatılınca kampanya `completed` oldu: SMS 3521, email 4013. Mock teslim sayıları birebir aynıydı, `max_per_second` 96/97.
     - Bu denemede öldürme anında "teslim edildi ama kaydedilmedi" durumu oluşmadı; bu durum katman 4 testinde deterministik olarak üretiliyor.
+    - Test kampanyası sonra silindi.
+- **Adım 10 (2026-11-07):** Gözlemlenebilirlik eklendi (`client_golang` v1.25).
+  - **Platform:** `platform` paketine registry, `/metrics` handler'ı, route kalıbıyla etiketleyen HTTP metrik ara katmanı ve `/readyz` eklendi.
+  - **Worker:** `delivery` paketine worker metrikleri ve kuyruk derinliği collector'ı eklendi. Worker artık `WORKER_ADDR` (`:8081`) üzerinde `/healthz`, `/readyz` ve `/metrics` sunuyor.
+  - **API:** `httpapi`'ye LLM metrikleri eklendi. `campaign.Progress` ve `GET /api/campaigns/{id}/events` dashboard akışı geldi.
+  - **llm:** `Attempt.IssueCodes` eklendi. Ayrıntılar: DECISIONS D-OBS ve D-STREAM.
+  - **Testler:**
+    - Katman 1:
+      - Route kalıbı etiketleri ve SSE flush'ının ara katmandan geçmesi.
+      - Worker sonuç sayaçları (fake'lerle).
+      - İçerik üretimi LLM metrikleri (onarım, hata kodları, token).
+      - Deneme başına hata kodları.
+    - Katman 2:
+      - `/readyz` (DB var/kapalı).
+      - Kuyruk derinliği gauge'u.
+      - Karışık durumlu kampanyanın özeti: sayılar, hız ve hata sıralaması; kişisel veri yok.
+      - Segment metrikleri.
+      - SSE akışının güncellenip tamamlanınca kendiliğinden kapanması.
+      - `/metrics`'te kişisel veri olmaması.
+  - **Bilerek bozma:** Ham URL etiketi kullanılınca kardinalite testi kırıldı. Akış tamamlanınca kapanmayınca SSE testi kırıldı. Bu ikinci kontrol yapılırken testin bu durumu yakalamadığı fark edildi ve "istemci zaman aşımından önce kapanmalı" kontrolü eklendi.
+  - **Elle duman testi:** Gerçek binary'lerle 7534 mesajlık kampanya.
+    - SSE saniyede bir güncellendi ve bitince kapandı. Kuyruk gauge'u sıfıra indi.
+    - Gönderim ortasında Postgres durduruldu: `/readyz` `503`, `/healthz` `200` döndü. DB geri gelince gönderim tamamlandı.
+    - 53 kaydedilemeyen sonuç tekrar gönderildi; çift teslim olmadı.
     - Test kampanyası sonra silindi.

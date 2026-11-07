@@ -173,6 +173,11 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - **Log:** Her üretim sonunda sonuç, onarım sayısı, deneme sayısı, token ve süre loglanır. Brief ve üretilen metin loglanmaz.
   - **Mock rozeti:** `GET /api/info` hangi LLM sağlayıcısının (`mock` veya `anthropic`) kullanıldığını döner; arayüz buna göre rozet gösterir (D-LLM-MOCK).
 - **Güncelleme (2026-11-07, PLAN adım 7):** İçerik üretimi kampanyaya bağlandı: `POST /api/campaigns/{id}/content/generations`. Brief ve kural istemciden değil, kayıtlı taslaktan okunur. Olay akışı (`GET /api/content/generations/{id}/events`) değişmedi. `POST /api/content/generations` ve `POST /api/content/validate` kaldırıldı; içerik doğrulaması artık `PUT /api/campaigns/{id}/content` yanıtında döner.
+- **Güncelleme (2026-11-07, PLAN adım 10):**
+  - **Dashboard akışı:** `GET /api/campaigns/{id}/events`. Saniyede bir `progress` olayı gönderilir. İçeriği: kampanya durumu, kanal başına `total/pending/sending/sent/failed/skipped`, son 10 sn'deki gönderim hızı (tüm kanalların toplamı), en sık 5 `last_error` (gönderilmemiş satırlardan; atlanma nedeni dahil) ve `done`.
+  - **Yeniden bağlanma:** Her olay tam durumu taşır; yeniden bağlanan istemci bir sonraki olayla doğru duruma gelir, replay gerekmez.
+  - **Kapanış:** Kampanya `completed` olduğunda son olay `done: true` ile gönderilir ve akış kapanır.
+  - **Hata durumları:** Bilinmeyen id için akış başlamadan JSON `404` döner. DB okuması başarısız olursa son durum korunur ve akış devam eder.
 
 ## D-CONTENT: İçerik kuralları
 
@@ -294,6 +299,26 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Karar:** `/metrics` Prometheus formatında yayınlanır (`client_golang`). Health kontrolü iki endpoint'e ayrılır: `/healthz` sürecin ayakta olup olmadığını, `/readyz` DB'ye erişilip erişilemediğini kontrol eder. Hem api hem worker için geçerlidir. Metrikler: gönderim durumları, provider gecikmesi, retry sayısı, LLM denemeleri ve doğrulama hataları, token kullanımı.
 - **Gerekçe:** Prometheus formatı yaygın bir standart; liveness ve readiness kontrollerinin ayrı olması da container ortamlarında yaygın bir pratik.
 - **Sınırlar:** Grafana panosu kurulmaz; canlı durum için uygulamanın kendi dashboard'u kullanılır.
+- **Güncelleme (2026-11-07, PLAN adım 10):**
+  - **Endpoint'ler:**
+    - API `:8080`, worker `:8081` (`WORKER_ADDR`). İkisinde de `/healthz`, `/readyz` ve `/metrics` var.
+    - `/readyz` DB'ye 2 sn süreli ping atar; erişemezse `503` döner. Hata ayrıntısı (host, kullanıcı) gösterilmez.
+    - `/healthz` DB'den bağımsızdır. Böylece bir DB kesintisi orkestratörde yeniden başlatma döngüsüne yol açmaz.
+  - **Registry:** Her binary'nin kendi registry'si var; Go çalışma zamanı ve süreç metrikleri dahil. Testler kendi temiz registry'lerini kullanır.
+  - **Metrikler:**
+    - HTTP: `scc_http_requests_total{route,code}`, `scc_http_request_duration_seconds{route}`. `route` ham URL değil mux kalıbıdır (`GET /api/campaigns/{id}`), böylece her kampanya ayrı bir seri açmaz. SSE yanıtlarının süresi ölçülmez.
+    - Worker:
+      - `scc_delivery_results_total{channel,result}` (sent, retry, throttled, failed, skipped, release).
+      - `scc_provider_request_duration_seconds{channel,class}`.
+      - `scc_delivery_record_errors_total`, `scc_delivery_lease_lost_total`.
+      - `scc_deliveries{channel,status}`: açık satırlar; her scrape'te DB'den okunur.
+    - LLM:
+      - `scc_llm_requests_total{operation,outcome}`, `scc_llm_repairs_total`.
+      - `scc_llm_validation_errors_total{operation,code}`: her denemenin hata kodları sayılır; bunun için `llm.Attempt`'e `IssueCodes` eklendi.
+      - `scc_llm_tokens_total{operation,type}`, `scc_llm_operation_duration_seconds`, `scc_segment_rule_status_total{status}`.
+  - **Etiketler:** Hiçbir etikette id, isim, telefon, email veya brief metni yoktur; testle doğrulanır.
+  - **Log:** İçerik üretim logundaki `outcome` değeri metrik etiketiyle aynı olsun diye `validated` yerine `ok` yapıldı.
+  - **Doğrulama:** Gönderim sırasında Postgres durdurulunca `/readyz` iki serviste de `503`, `/healthz` `200` döndü. DB geri gelince worker kendiliğinden devam etti. Kesinti sırasında 53 sonuç yazılamadı (`scc_delivery_record_errors_total`); bunlar lease sonrası aynı anahtarla tekrar gönderildi ve mock'taki teslim sayısı DB ile birebir aynı kaldı.
 
 ## D-FE: Frontend
 
