@@ -19,7 +19,7 @@ Bir adım bitince durumu güncellenir ve kısa bir not düşülür.
 | 5b | `make test-live` | Adım 1 doğrulamasının kalıcı hâli: Anthropic adaptörü üzerinden en fazla 2 gerçek çağrı (`end_turn` + sıkı doğrulama, `max_tokens` dalı), `//go:build live`. Çalıştırmak için kullanıcı onayı gerekir (D-TEST) | R-AI-1 | ✅ |
 | 6 | `content` paketi ve üretim akışı | Mesaj şeması, rune ile sayım, değişkenler için en kötü durum doğrulaması, artımlı JSON çıkarıcı, SSE ile üretim endpoint'i | R-CNT-1..3 | ✅ |
 | 7 | `campaign` paketi | Durum makinesi, `partial` onayı, kanal seçimi, onay anında snapshot (`deliveries`), HTTP API | R-AUD-2, R-SEND-3 | ✅ |
-| 8 | Mock provider | Hata, gecikme ve 429 enjeksiyonu; kayan pencere limiti; idempotency anahtarları; istatistik endpoint'i | R-MOCK-1, R-MOCK-2 | ⏳ |
+| 8 | Mock provider | Hata, gecikme ve 429 enjeksiyonu; kayan pencere limiti; idempotency anahtarları; istatistik endpoint'i | R-MOCK-1, R-MOCK-2 | ✅ |
 | 9 | `delivery` worker | Claim ve lease, retry/backoff, kanal başına limiter, izin tekrar kontrolü. Worker'ı öldürüp yeniden başlatan test | R-SEND-1..4 | ⏳ |
 | 10 | Gözlemlenebilirlik | `/metrics`, `/healthz`, `/readyz`, dashboard SSE akışı | R-OBS-1..3 | ⏳ |
 | 11 | Frontend | Brief formu → kural kartları ve sayılar → içerik akışı ve düzenleme → onay (kanal checkbox'ları, `partial` onayı) → dashboard | Bölüm 3 | ⏳ |
@@ -154,3 +154,23 @@ Puanlama, kuralın seed'de döndürdüğü kullanıcı kümesiyle yapılır (bkz
     - `partial` kontrolü kapatılınca 3 test kırıldı.
   - Mock modda `curl` ile duman testi yapıldı: paralel iki onay `200` + `409` döndü, `deliveries` sayıları API ile aynı çıktı. Test kampanyası sonra silindi.
   - Not: Sayılar seed'in üretildiği zamana göre kayar (case brief'i şu an SMS 111, email 118); "son N gün" penceresi gerçek saatle ilerler.
+- **Adım 8 (2026-11-07):** Mock provider eklendi (`internal/mockprovider`, `cmd/mockprovider`). İş paketlerini import etmez, yalnızca HTTP üzerinden konuşur.
+  - Kanal başına kayan pencere (saniyede 100), idempotency, seed'li hata enjeksiyonu (`500`, `429`, kabul et-ama-500, gecikme), `/stats` ve `/reset`.
+  - Ayarlar `MOCK_*` env değişkenleriyle yapılır; `.env.example`'a eklendi. Ayrıntılar: DECISIONS D-MOCK ve D-RATE.
+  - Testler (katman 1, ağ kullanılmaz; handler doğrudan çağrılır):
+    - Pencere sınırları ve sınırda patlama olmaması.
+    - 101. istekte `429` + `Retry-After`; kanalların birbirinden bağımsızlığı.
+    - Tekrarlanan anahtarda aynı yanıt; farklı gövdede `422`.
+    - Kabul et-ama-500 sonrası retry'da ikinci mesaj olmaması.
+    - Hata sonrası anahtarın serbest kalması.
+    - 20 paralel aynı anahtarla tek teslim.
+    - Seed ile tekrarlanabilir hata dizisi ve oranlar.
+    - `testing/synctest` ile gecikme ve istemcinin bağlantıyı kesmesi.
+    - Hatalı istekler, config doğrulaması.
+    - Log ve `/stats`'ta kişisel veri olmaması.
+  - Bilerek bozma:
+    - Replay kapatılınca 3 test kırıldı.
+    - Anahtar serbest bırakma kapatılınca 3 test kırıldı.
+    - Pencere yalnızca kabul edilenleri sayınca 2 test kırıldı.
+  - Binary ile `curl` duman testi yapıldı: aynı anahtar aynı `message_id`'yi döndü. 150 paralel istekte pencerede 100 kabul, 52 `429` oldu. Logda telefon numarası yok.
+  - `docker-compose.yml`'ye ekleme 12. adımda yapılacak.

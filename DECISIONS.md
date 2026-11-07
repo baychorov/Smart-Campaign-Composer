@@ -237,12 +237,31 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Gerekçe:** Burst değeri büyük olursa boşta biriken jetonlarla bir saniyede yaklaşık 200 mesaj gidebilir. Ayrı kanal havuzları sayesinde email'deki bir 429 SMS gönderimini durdurmaz.
 - **Alternatifler:** Redis veya DB tabanlı dağıtık limiter: çoklu worker için doğru, ama şu an gereksiz altyapı. Sabit pencere sayacı: pencere sınırında limitin iki katına çıkabilir.
 - **Sınırlar:** Tek worker replikası varsayılır. Doğrulama mock provider'ın kayan pencere sayacıyla yapılır: herhangi bir 1 saniyelik pencerede en fazla 100 istek.
+- **Güncelleme (2026-11-07, PLAN adım 8):** Mock'un penceresi `(now-1s, now]` aralığıdır ve reddedilen istekler dahil **gelen her isteği** sayar. `/stats` içindeki `max_per_second`, istemcinin herhangi bir 1 saniyelik aralıkta gönderdiği en fazla isteği gösterir; 9. adımdaki test bunun ≤ 100 olduğunu kontrol eder. Sabit saniye sayacının sınırda 2 katına çıkma sorunu testle gösterildi: 0,9 sn'de 3, 1,1 sn'de 3 istek; kayan pencere ikinci grubu reddeder.
 
 ## D-MOCK: Mock provider (R-MOCK-1, R-MOCK-2)
 
 - **Karar:** Ayrı bir HTTP servisidir. Hata, gecikme ve 429 oranları env ile ayarlanır; RNG seed'i sabitlenebilir. Kendi kayan penceresiyle 100 msg/sn limitini uygular. İsteği kabul edip 500 döndürme modu vardır. Idempotency anahtarlarını saklar ve test için bir istatistik endpoint'i sunar.
 - **Gerekçe:** Retry, rate limit ve idempotency davranışları ancak gerçekçi hata türleriyle test edilebilir.
 - **Sınırlar:** Veriler bellekte tutulur; servis yeniden başlarsa kayıtlar silinir.
+- **Güncelleme (2026-11-07, PLAN adım 8):** `internal/mockprovider` ve `cmd/mockprovider` eklendi.
+  - **Endpoint'ler:**
+    - `POST /sms` (`{to, text}`) ve `POST /email` (`{to, subject, body}`). `Idempotency-Key` başlığı zorunludur.
+    - Yanıtlar: `202 {message_id, status}`, `400`, `409`, `422`, `429` (`Retry-After` ile) ve `500`.
+    - Test için `GET /stats` ve `POST /reset`.
+  - **İşlem sırası:** gövde ve anahtar kontrolü → kayan pencere limiti → idempotency → rastgele hata → teslim. Limit önce gelir; gerçek bir provider tekrarlanan istekleri de sayar.
+  - **Idempotency:**
+    - Yalnızca teslim edilen mesajın yanıtı saklanır. `500` veya rastgele `429` sonrası anahtar serbest kalır, retry yeniden işlenir.
+    - "Kabul et ama 500 dön" durumunda teslim saklanır; aynı anahtarla gelen retry ilk başarılı yanıtı alır ve ikinci mesaj oluşmaz.
+    - Aynı anahtar işlenirken gelen ikinci istek `409` alır.
+    - Aynı anahtar farklı bir gövdeyle gelirse `422` döner. Bu bir istemci hatasıdır. Gövde karşılaştırması boşluklardan etkilenmez.
+    - Anahtarlar kanal başına ayrıdır.
+  - **Hata enjeksiyonu:**
+    - Tek bir rastgele sayı bantlara bölünür: `MOCK_ERROR_RATE`, `MOCK_429_RATE`, `MOCK_ACCEPT_THEN_FAIL_RATE`. Oranların toplamı en fazla 1'dir.
+    - Gecikme `0..MOCK_DELAY_MAX` aralığındadır. İstemci gecikme sırasında bağlantıyı keserse mesaj gönderilmez ve anahtar serbest kalır.
+    - Varsayılanlar: %5 `500`, %3 `429`, %2 kabul et-ama-500, en fazla 50 ms gecikme, seed 42. `/reset` sayaçları sıfırlar ve hata dizisini seed'den yeniden başlatır.
+  - **Ayarlar:** `MOCK_*` env değişkenleri `platform.Config`'e değil `mockprovider.Config`'e okunur; yalnızca bu sahte servisi ilgilendirir.
+  - **Kişisel veri:** Alıcı ve metin loglanmaz ve `/stats`'a girmez. Logda yalnızca kanal, anahtar (delivery id) ve sonuç bulunur.
 
 ## D-SNAPSHOT: Kitlenin hesaplanma zamanı
 
