@@ -41,11 +41,13 @@ func TestFromEnv(t *testing.T) {
 				"LLM_MODEL":          "claude-haiku-5-5",
 				"API_ADDR":           ":9000",
 				"MOCK_PROVIDER_ADDR": ":9001",
+				"ANTHROPIC_BASE_URL": "http://127.0.0.1:9999",
 			},
 			want: Config{
 				DatabaseURL:      "postgres://u:p@db:5432/x",
 				LLMProvider:      LLMProviderMock,
 				LLMModel:         "claude-haiku-5-5",
+				AnthropicBaseURL: "http://127.0.0.1:9999",
 				APIAddr:          ":9000",
 				MockProviderAddr: ":9001",
 			},

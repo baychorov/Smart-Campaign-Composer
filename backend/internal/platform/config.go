@@ -52,10 +52,13 @@ func (s Secret) MarshalJSON() ([]byte, error) { return []byte(`"` + s.String() +
 
 // Config is the typed configuration shared by all binaries.
 type Config struct {
-	DatabaseURL      string
-	LLMProvider      string
-	LLMModel         string
-	AnthropicAPIKey  Secret
+	DatabaseURL     string
+	LLMProvider     string
+	LLMModel        string
+	AnthropicAPIKey Secret
+	// AnthropicBaseURL is empty for the production API. Set it to point the
+	// adapter at a proxy or a local fake server (D-LLM-MOCK).
+	AnthropicBaseURL string
 	APIAddr          string
 	MockProviderAddr string
 }
@@ -91,6 +94,7 @@ func FromEnv(getenv func(string) string) (Config, error) {
 		LLMProvider:      get("LLM_PROVIDER", defaultLLMProvider),
 		LLMModel:         get("LLM_MODEL", defaultLLMModel),
 		AnthropicAPIKey:  Secret(getenv("ANTHROPIC_API_KEY")),
+		AnthropicBaseURL: getenv("ANTHROPIC_BASE_URL"),
 		APIAddr:          get("API_ADDR", defaultAPIAddr),
 		MockProviderAddr: get("MOCK_PROVIDER_ADDR", defaultMockProviderAddr),
 	}
@@ -120,6 +124,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("llm_provider", c.LLMProvider),
 		slog.String("llm_model", c.LLMModel),
 		slog.Bool("anthropic_api_key_set", c.AnthropicAPIKey != ""),
+		slog.String("anthropic_base_url", c.AnthropicBaseURL),
 		slog.String("api_addr", c.APIAddr),
 		slog.String("mock_provider_addr", c.MockProviderAddr),
 	)

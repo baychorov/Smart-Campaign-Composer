@@ -1,4 +1,4 @@
-.PHONY: test test-unit lint db-up db-down seed seed-reset
+.PHONY: test test-unit test-live lint db-up db-down seed seed-reset
 
 BACKEND := backend
 
@@ -12,10 +12,15 @@ test-unit:
 test: db-up
 	cd $(BACKEND) && go test -race -count=1 -tags integration ./...
 
+# Layer 5: real API, paid (at most 2 calls, SDK retries off). Needs
+# ANTHROPIC_API_KEY in the environment or .env. Run only with approval.
+test-live:
+	cd $(BACKEND) && go test -count=1 -v -tags live -run '^TestLive' ./internal/llm/
+
 lint:
 	@unformatted=$$(cd $(BACKEND) && gofmt -l .); \
 	if [ -n "$$unformatted" ]; then echo "gofmt needed:"; echo "$$unformatted"; exit 1; fi
-	cd $(BACKEND) && go vet ./... && go vet -tags integration ./...
+	cd $(BACKEND) && go vet ./... && go vet -tags integration ./... && go vet -tags live ./...
 
 db-up:
 	docker compose up -d --wait postgres

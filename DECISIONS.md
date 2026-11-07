@@ -58,6 +58,9 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - **Koşul biçimi:** Tek bir düz struct kullanılır: `type` (`attribute` | `event`); attribute için `field`, `op`, `values` (city) veya `value` (age); event için `event`, `occurred` (bool), `within_days`. Hangi alanların dolu olacağını doğrulama zorlar. `unsupported[].group` 0 tabanlıdır.
   - **Derleme:** Derleyici, kuralı kendisi `Validate`'ten geçirir ve yalnızca `ok`/`partial` kuralları derler. `rejected` veya `unsupported` bir kural asla "herkese gönder"e dönüşmez. "Son N gün" penceresi Go'da `now`'dan hesaplanıp parametre olarak verilir.
   - **Sınır:** `segment` sorguyu yalnızca üretir. Read-only transaction ve `statement_timeout` ile çalıştırma adım 7'de `campaign` paketinde yapılır.
+- **Güncelleme (2026-11-07, kullanıcı kararı): Yaş ifadelerinin yorumu.** "X yaş üstü", "X yaş üzeri" ve "X yaş ve üstü" hepsi `age gte X` olarak yorumlanır, yani X dahildir. "X yaş altı" `age lte X-1` olarak yorumlanır, yani X hariçtir. Kural prompt'ta yazılıdır. Kural özeti zaten "X yaş ve üzeri" diye gösterdiği için pazarlamacı sınırın dahil olduğunu görür.
+  - Gerekçe: Günlük dilde "18 yaş üstü" çoğunlukla "18 ve üstü" anlamında kullanılır. Test setinde #6 ile #16 bu konuda çelişiyordu; #16 `age≥40` olarak düzeltildi.
+  - Sınır: "Altı" ile "üstü" simetrik değildir. Belirsiz bir durumda pazarlamacı, onay ekranındaki özetten sınırı görüp düzeltebilir.
 
 ## D-PARTIAL: Kısmi kural onayı kilitler
 
@@ -100,6 +103,15 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - **Gecikme:** İlk event iki çağrıda da yaklaşık 7–8,5 sn sonra geldi. `message_start` ilk text delta ile aynı anda geliyor. Aynı şemayla yapılan ikinci çağrı daha hızlı değildi, yani şema cache'inin etkisi bu örneklemde görülmedi. Sonuç: Backend `started` olayını Claude'un ilk event'ini beklemeden kendisi gönderir, arayüz bu sürede "hazırlanıyor" durumu gösterir (D-STREAM).
   - **Refusal:** Tetiklenmedi (bilerek denenmedi). `StopReasonRefusal` sabiti ve `StopDetails{Category, Explanation}` alanları derleme ile doğrulandı. Davranış fake ile test edilecek.
   - **Hata:** `*anthropic.Error` mesajı metot, URL, status ve request-id içeriyor; API key içermiyor. Ayrıntı `RawJSON()` ile alınır.
+- **Güncelleme (2026-11-07, PLAN adım 5):**
+  - **Şema:** Koşul `anyOf` içinde iki değil üç varyantla yazıldı: şehir (`values`), yaş (`value`) ve olay. Tip ve alan `const` ile sabitlendi. Böylece "şehir için `value`" gibi karışıklıkları şema baştan engeller ve `null` alanlara gerek kalmaz. Şema `internal/llm/segment_schema.json` dosyasında durur, `go:embed` ile binary'ye gömülür. Bir test, şemadaki alan adlarının ve enum değerlerinin `segment.Rule` ve Go sabitleriyle aynı kaldığını kontrol eder. Bu şekil gerçek API'de henüz denenmedi; ilk kontrolü adım 5b'deki `make test-live` yapar.
+  - **Kimlik bilgisi:** Adaptör SDK'yı `option.WithoutEnvironmentDefaults()` ile kurar. Key ve base URL yalnızca `platform.Config`'ten gelir, SDK ortam değişkenlerini veya diskteki profilleri kendisi okumaz. SDK v2.7.0 key'i `Authorization: Bearer` başlığıyla gönderir (`x-api-key` ile değil).
+  - **Base URL:** `ANTHROPIC_BASE_URL` config'e eklendi (`AnthropicBaseURL`). Boş değer production API demektir.
+- **Güncelleme (2026-11-07, PLAN adım 5b, `make test-live`):** 2 gerçek çağrı yapıldı.
+  - Üç varyantlı koşul şeması 400 almadan kabul edildi. Case brief'i D-CART kuralına çevrildi ve sıkı decode ile doğrulamadan uyarısız geçti.
+  - Input 2742 token oldu (adım 1'de 1635). Artışın sebebi daha uzun system prompt. Output 201 token. İlk delta 2,9 sn sonra geldi (adım 1'de 7–8,5 sn); örneklem küçük olduğu için gecikme beklentisi değiştirilmedi.
+  - **Alan sırası:** Model JSON anahtarlarını şemadaki sırayla değil, alfabetik sırayla üretti (`assumptions`, `audience_scope`, `common`, …). Adım 6'daki artımlı JSON çıkarıcı alan sırasına güvenmemeli; her alanı adına göre tanımalı.
+  - `max_tokens=40` ile `max_tokens` döndü ve yarım metin geçersiz JSON'du. Adaptör bunu hata değil stop reason olarak döndürüyor; parse etmeme kararı `generate` içinde uygulanıyor.
 
 ## D-LLM-RETRY: LLM hata ve onarım stratejisi
 
@@ -113,6 +125,12 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Gerekçe:** Transport hataları, model hataları ve iş kuralı hataları farklı tepki gerektirir. Tek turluk onarım isteği, önceki konuşmayı yeniden göndermeyi ve thinking bloklarının yönetimini gerektirmez.
 - **Alternatifler:** Sınırsız onarım: maliyet ve gecikme. Onarım hiç yapmamak: kullanıcıyı gereksiz yere hataya bırakır.
 - **Sınırlar:** Her denemenin token kullanımı ve hata nedeni loglanır ve metrik olarak sayılır (R-OBS-2).
+- **Güncelleme (2026-11-07, PLAN adım 5):** Sayılar ve ayrıntılar kesinleşti (`internal/llm/segment.go`):
+  - **Stream kopması:** En fazla 1 kez baştan başlatılır. İlk event'ten sonraki her hata (bağlantı kopması, stream içinde gelen `error` olayı, `message_delta` gelmeden kapanan bağlantı) "kopma" sayılır. İlk event'ten önceki API hataları `*llm.APIError` olarak döner ve tekrar denenmez, çünkü SDK 429/5xx için zaten denemiştir.
+  - **`max_tokens`:** Segment çıkarımı 8000 ile başlar, kesilirse 32000 ile bir kez tekrar dener. Yine kesilirse `ErrTruncated` döner. Metin tam bir JSON gibi görünse bile parse edilmez.
+  - **Onarımı tetikleyen hatalar:** Sıkı decode hatası (bilinmeyen alan, yanlış tip, JSON dışı metin; kod `invalid_json`) ve `segment.Validate` hataları. Anlamı değiştirmeyen düzeltmeler (enum harfi, şehir yazımı, tek grup) uyarıdır ve onarıma gitmez.
+  - **Brief sınırı:** En fazla 2000 karakter (rune ile sayılır). Boş veya daha uzun brief API çağrısı yapılmadan `ErrInvalidBrief` ile reddedilir.
+  - **Kayıt:** Her çağrı `Attempt` olarak (onarım sırası, `stop_reason`, token, hata) sonuçla birlikte döner. Loglama ve metrik işi çağıran tarafta yapılır (adım 7 ve 10).
 
 ## D-MODEL: Model ve çağrı ayarları
 
@@ -121,6 +139,7 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Alternatifler:** `claude-opus-5-5`: daha yetenekli ama iki kat pahalı. `claude-haiku-5-5`: çok ucuz ama daha fazla onarım denemesi riski var.
 - **Sınırlar:** Kalite `make eval` ile ölçülür. Model değişirse eval tekrar çalıştırılır.
 - **Güncelleme (2026-11-06):** `fallbacks: "default"` kullanılmayacak (kullanıcı kararı). Refusal nadir bir durum; olduğunda D-LLM-RETRY'daki gibi parse edilmeden kullanıcıya gösterilir. Böylece beta API yüzeyine bağımlılık kalmaz ve stabil `client.Messages` yolu yeterli olur. `thinking` gönderilmeden `effort: low` ile segment çıkarımı doğru sonuç verdi (bkz. D-LLM-OUT güncellemesi).
+- **Güncelleme (2026-11-07):** `fallbacks` kararı yeniden değerlendirildi ve aynen korundu (kullanıcı kararı). Ek gerekçe: Fallback, kuralı başka bir modele ürettirir. O model karmaşık JSON şemasında aynı başarıyı göstermeyebilir ve eval yalnızca seçili model için yapılır.
 
 ## D-LLM-MOCK: Test edilebilir LLM katmanı
 
