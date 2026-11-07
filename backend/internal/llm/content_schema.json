@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sms", "email_subject", "email_body"],
+  "properties": {
+    "sms": {"type": "string"},
+    "email_subject": {"type": "string"},
+    "email_body": {"type": "string"}
+  }
+}

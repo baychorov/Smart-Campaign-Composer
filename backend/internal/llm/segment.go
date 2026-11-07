@@ -82,13 +82,28 @@ type SegmentResult struct {
 }
 
 // Usage sums the tokens of all attempts.
-func (r SegmentResult) Usage() Usage {
+func (r SegmentResult) Usage() Usage { return sumUsage(r.Attempts) }
+
+func sumUsage(attempts []Attempt) Usage {
 	var u Usage
-	for _, a := range r.Attempts {
+	for _, a := range attempts {
 		u.InputTokens += a.Usage.InputTokens
 		u.OutputTokens += a.Usage.OutputTokens
 	}
 	return u
+}
+
+// CheckBrief trims the brief and enforces MaxBriefRunes. It is run before
+// any call; handlers use it to reject a bad brief synchronously.
+func CheckBrief(brief string) (string, error) {
+	brief = strings.TrimSpace(brief)
+	if brief == "" {
+		return "", fmt.Errorf("%w: empty", ErrInvalidBrief)
+	}
+	if n := utf8.RuneCountInString(brief); n > MaxBriefRunes {
+		return "", fmt.Errorf("%w: %d characters, at most %d", ErrInvalidBrief, n, MaxBriefRunes)
+	}
+	return brief, nil
 }
 
 // ExtractSegment turns a brief into a validated segment rule:
@@ -101,12 +116,9 @@ func (r SegmentResult) Usage() Usage {
 // it describes an audience.
 func ExtractSegment(ctx context.Context, c Client, brief string) (SegmentResult, error) {
 	var res SegmentResult
-	brief = strings.TrimSpace(brief)
-	if brief == "" {
-		return res, fmt.Errorf("%w: empty", ErrInvalidBrief)
-	}
-	if n := utf8.RuneCountInString(brief); n > MaxBriefRunes {
-		return res, fmt.Errorf("%w: %d characters, at most %d", ErrInvalidBrief, n, MaxBriefRunes)
+	brief, err := CheckBrief(brief)
+	if err != nil {
+		return res, err
 	}
 
 	prompt := segmentPrompt(brief)
