@@ -32,6 +32,7 @@ func TestFromEnv(t *testing.T) {
 				LLMModel:         "claude-sonnet-5-5",
 				APIAddr:          ":8080",
 				MockProviderAddr: ":8090",
+				ProviderURL:      defaultProviderURL,
 			},
 		},
 		{
@@ -42,6 +43,7 @@ func TestFromEnv(t *testing.T) {
 				"API_ADDR":           ":9000",
 				"MOCK_PROVIDER_ADDR": ":9001",
 				"ANTHROPIC_BASE_URL": "http://127.0.0.1:9999",
+				"PROVIDER_URL":       "http://mock:9001",
 			},
 			want: Config{
 				DatabaseURL:      "postgres://u:p@db:5432/x",
@@ -50,6 +52,7 @@ func TestFromEnv(t *testing.T) {
 				AnthropicBaseURL: "http://127.0.0.1:9999",
 				APIAddr:          ":9000",
 				MockProviderAddr: ":9001",
+				ProviderURL:      "http://mock:9001",
 			},
 		},
 		{
@@ -62,6 +65,7 @@ func TestFromEnv(t *testing.T) {
 				AnthropicAPIKey:  "sk-test",
 				APIAddr:          ":8080",
 				MockProviderAddr: ":8090",
+				ProviderURL:      defaultProviderURL,
 			},
 		},
 		{
@@ -72,6 +76,11 @@ func TestFromEnv(t *testing.T) {
 		{
 			name:    "unknown provider",
 			env:     map[string]string{"LLM_PROVIDER": "openai"},
+			wantErr: true,
+		},
+		{
+			name:    "provider url without scheme",
+			env:     map[string]string{"PROVIDER_URL": "localhost:8090"},
 			wantErr: true,
 		},
 		{

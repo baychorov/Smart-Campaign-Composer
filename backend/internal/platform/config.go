@@ -26,6 +26,7 @@ const (
 	defaultLLMModel         = "claude-sonnet-5-5"
 	defaultAPIAddr          = ":8080"
 	defaultMockProviderAddr = ":8090"
+	defaultProviderURL      = "http://localhost:8090"
 )
 
 // ErrInvalidConfig is wrapped by every validation error returned from FromEnv.
@@ -61,6 +62,8 @@ type Config struct {
 	AnthropicBaseURL string
 	APIAddr          string
 	MockProviderAddr string
+	// ProviderURL is where the worker sends messages (the mock provider).
+	ProviderURL string
 }
 
 // Load reads an optional .env file into the process environment (existing
@@ -97,6 +100,7 @@ func FromEnv(getenv func(string) string) (Config, error) {
 		AnthropicBaseURL: getenv("ANTHROPIC_BASE_URL"),
 		APIAddr:          get("API_ADDR", defaultAPIAddr),
 		MockProviderAddr: get("MOCK_PROVIDER_ADDR", defaultMockProviderAddr),
+		ProviderURL:      get("PROVIDER_URL", defaultProviderURL),
 	}
 
 	switch cfg.LLMProvider {
@@ -107,6 +111,10 @@ func FromEnv(getenv func(string) string) (Config, error) {
 		}
 	default:
 		return Config{}, fmt.Errorf("%w: LLM_PROVIDER must be %q or %q, got %q", ErrInvalidConfig, LLMProviderMock, LLMProviderAnthropic, cfg.LLMProvider)
+	}
+
+	if u, err := url.Parse(cfg.ProviderURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return Config{}, fmt.Errorf("%w: PROVIDER_URL must be an http(s) URL, got %q", ErrInvalidConfig, cfg.ProviderURL)
 	}
 
 	if _, err := url.Parse(cfg.DatabaseURL); err != nil {
@@ -127,6 +135,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("anthropic_base_url", c.AnthropicBaseURL),
 		slog.String("api_addr", c.APIAddr),
 		slog.String("mock_provider_addr", c.MockProviderAddr),
+		slog.String("provider_url", c.ProviderURL),
 	)
 }
 
