@@ -1,0 +1,59 @@
+/*
+ * Design tokens. Soft light theme only (decision 2026-11-07, D-FE): calm,
+ * low-contrast surfaces, one muted blue accent, desaturated status colours.
+ * Components use these variables, never literal colours, so the theme can
+ * be changed here in one place.
+ */
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --surface-muted: #f1f4f8;
+  --line: #e3e8ef;
+  --line-strong: #cfd7e2;
+
+  /* Text */
+  --ink: #273142;
+  --ink-soft: #4a5568;
+  --muted: #7a8596;
+
+  /* Accent: muted cobalt */
+  --accent: #4f6fd8;
+  --accent-hover: #4361c8;
+  --accent-soft: #edf1fd;
+  --accent-ink: #ffffff;
+
+  /* Status (soft tints with readable foregrounds) */
+  --ok: #2f8a5f;
+  --ok-soft: #e9f6ef;
+  --warn: #a8701d;
+  --warn-soft: #fdf5e6;
+  --bad: #c0504a;
+  --bad-soft: #fcefee;
+  --info: #3f7fa6;
+  --info-soft: #eaf4f9;
+  --variable: #7a5fc0;
+  --variable-soft: #f2eefb;
+
+  /* Channels */
+  --sms: #3f8fae;
+  --email: #c08a45;
+
+  /* Type */
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 22px;
+
+  /* Shape */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --shadow-card: 0 1px 2px rgba(39, 49, 66, 0.04), 0 4px 16px rgba(39, 49, 66, 0.04);
+  --shadow-bar: 0 -4px 20px rgba(39, 49, 66, 0.06);
+}
