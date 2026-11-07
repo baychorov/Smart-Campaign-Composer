@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -17,8 +16,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/campaign"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/content"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/llm"
+	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/segment"
 )
 
 const longestName = "Muhammed Abdurrahman Şahabettin"
@@ -90,11 +91,8 @@ func newTestServer(t *testing.T, client llm.Client) *testServer {
 	t.Helper()
 	logs := newLogBuffer()
 	api := New(Config{
-		LLM:         client,
-		LLMProvider: "mock",
-		Longest: func(context.Context) (content.Values, error) {
-			return content.Values{content.VarFirstName: longestName, content.VarCity: "Afyonkarahisar"}, nil
-		},
+		LLM:               client,
+		LLMProvider:       "mock",
 		Log:               slog.New(slog.NewJSONHandler(logs, nil)),
 		GenerationTimeout: 10 * time.Second,
 	})
@@ -119,18 +117,20 @@ func (s *testServer) post(t *testing.T, path, body string) (*http.Response, map[
 	return resp, out
 }
 
+// start launches a generation the way the campaign route does, without a
+// database: the input is built from the rule like campaign.GenerationInput.
 func (s *testServer) start(t *testing.T, brief, rule string) string {
 	t.Helper()
-	body, _ := json.Marshal(map[string]any{"brief": brief, "rule": json.RawMessage(rule)})
-	resp, out := s.post(t, "/api/content/generations", string(body))
-	if resp.StatusCode != http.StatusAccepted {
-		t.Fatalf("status %d: %v", resp.StatusCode, out)
+	var r segment.Rule
+	if err := json.Unmarshal([]byte(rule), &r); err != nil {
+		t.Fatal(err)
 	}
-	id, _ := out["id"].(string)
-	if id == "" || out["events_url"] != "/api/content/generations/"+id+"/events" {
-		t.Fatalf("response %v", out)
+	v := segment.Validate(r)
+	if !v.Approvable() {
+		t.Fatalf("test rule not approvable: %v", v.Errors)
 	}
-	return id
+	in := campaign.ContentInput(campaign.Campaign{Brief: brief, Rule: v.Rule})
+	return s.api.launchGeneration(in, content.Values{content.VarFirstName: longestName, content.VarCity: "Afyonkarahisar"})
 }
 
 type event struct {
@@ -171,9 +171,16 @@ func readEvents(t *testing.T, body io.Reader) []event {
 
 func (s *testServer) events(t *testing.T, id, lastEventID string) []event {
 	t.Helper()
+	return streamEvents(t, s.URL, id, lastEventID)
+}
+
+// streamEvents reads the whole event stream of generation id from the API
+// at baseURL.
+func streamEvents(t *testing.T, baseURL, id, lastEventID string) []event {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, s.URL+"/api/content/generations/"+id+"/events", nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/api/content/generations/"+id+"/events", nil)
 	if lastEventID != "" {
 		req.Header.Set("Last-Event-ID", lastEventID)
 	}
@@ -374,39 +381,6 @@ func TestGenerationTerminalEvents(t *testing.T) {
 	})
 }
 
-func TestStartGenerationRejects(t *testing.T) {
-	fake := llm.NewFake()
-	s := newTestServer(t, fake)
-	rejected := `{"status":"rejected","audience_scope":"filtered","common":[],"groups":[],"assumptions":[],"unsupported":[{"text":"x","reason":"off_topic","group":null}],"notes":[]}`
-	tests := []struct {
-		name   string
-		body   string
-		status int
-		code   string
-	}{
-		{"not JSON", `{brief`, 400, "invalid_json"},
-		{"unknown field", `{"brief":"b","rule":` + caseRuleJSON + `,"sql":"x"}`, 400, "invalid_json"},
-		{"empty brief", `{"brief":"  ","rule":` + caseRuleJSON + `}`, 400, "invalid_brief"},
-		{"too long brief", `{"brief":"` + strings.Repeat("ş", llm.MaxBriefRunes+1) + `","rule":` + caseRuleJSON + `}`, 400, "invalid_brief"},
-		{"rejected rule", `{"brief":"b","rule":` + rejected + `}`, 422, "invalid_rule"},
-		{"invalid rule", `{"brief":"b","rule":{"status":"ok","audience_scope":"filtered"}}`, 422, "invalid_rule"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			resp, out := s.post(t, "/api/content/generations", tt.body)
-			if resp.StatusCode != tt.status || out["error"] != tt.code {
-				t.Fatalf("status %d, body %v", resp.StatusCode, out)
-			}
-		})
-	}
-	if n := s.api.gens.len(); n != 0 {
-		t.Errorf("%d generations started for rejected requests", n)
-	}
-	if len(fake.Calls()) != 0 {
-		t.Error("no model call expected")
-	}
-}
-
 func TestEventsUnknownID(t *testing.T) {
 	s := newTestServer(t, llm.NewFake())
 	resp, err := http.Get(s.URL + "/api/content/generations/nope/events")
@@ -416,60 +390,6 @@ func TestEventsUnknownID(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("status %d", resp.StatusCode)
-	}
-}
-
-func TestValidateEndpoint(t *testing.T) {
-	s := newTestServer(t, llm.NewFake())
-	msg := func(sms string) string {
-		m := goodMessage
-		m.SMS = sms
-		return messageText(t, m)
-	}
-	tests := []struct {
-		name  string
-		body  string
-		valid bool
-		code  string
-	}{
-		{"160 Turkish characters", msg(strings.Repeat("ğ", 160)), true, ""},
-		{"161 Turkish characters", msg(strings.Repeat("ğ", 161)), false, content.CodeTooLong},
-		{"fits as written, not with the longest name", msg("{{first_name}}" + strings.Repeat("a", 140)), false, content.CodeTooLong},
-		{"unknown variable", msg("Merhaba {{ad}}"), false, content.CodeUnknownVariable},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			resp, out := s.post(t, "/api/content/validate", tt.body)
-			if resp.StatusCode != http.StatusOK || out["valid"] != tt.valid {
-				t.Fatalf("status %d, body %v", resp.StatusCode, out)
-			}
-			errs := out["errors"].([]any)
-			if tt.code != "" && (len(errs) == 0 || errs[0].(map[string]any)["code"] != tt.code) {
-				t.Fatalf("errors %v, want %s", errs, tt.code)
-			}
-		})
-	}
-}
-
-func TestLongestUnavailable(t *testing.T) {
-	logs := &bytes.Buffer{}
-	api := New(Config{
-		LLM:     llm.NewFake(),
-		Longest: func(context.Context) (content.Values, error) { return nil, errors.New("db down") },
-		Log:     slog.New(slog.NewJSONHandler(logs, nil)),
-	})
-	mux := http.NewServeMux()
-	api.Register(mux)
-	for _, path := range []string{"/api/content/validate", "/api/content/generations"} {
-		body := messageText(t, goodMessage)
-		if strings.Contains(path, "generations") {
-			body = `{"brief":"b","rule":` + caseRuleJSON + `}`
-		}
-		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, path, strings.NewReader(body)))
-		if rec.Code != http.StatusServiceUnavailable {
-			t.Errorf("%s: status %d", path, rec.Code)
-		}
 	}
 }
 

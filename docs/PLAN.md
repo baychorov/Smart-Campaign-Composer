@@ -18,7 +18,7 @@ Bir adım bitince durumu güncellenir ve kısa bir not düşülür.
 | 5 | `llm` paketi | `Client` interface'i, fake, Anthropic adaptörü, segment çıkarımı ve onarım döngüsü, kontrat testleri (katman 3: sahte SSE sunucusu, bölünmüş `\uXXXX` kaçışı dahil) | R-AI-1, R-AI-2 | ✅ |
 | 5b | `make test-live` | Adım 1 doğrulamasının kalıcı hâli: Anthropic adaptörü üzerinden en fazla 2 gerçek çağrı (`end_turn` + sıkı doğrulama, `max_tokens` dalı), `//go:build live`. Çalıştırmak için kullanıcı onayı gerekir (D-TEST) | R-AI-1 | ✅ |
 | 6 | `content` paketi ve üretim akışı | Mesaj şeması, rune ile sayım, değişkenler için en kötü durum doğrulaması, artımlı JSON çıkarıcı, SSE ile üretim endpoint'i | R-CNT-1..3 | ✅ |
-| 7 | `campaign` paketi | Durum makinesi, `partial` onayı, kanal seçimi, onay anında snapshot (`deliveries`), HTTP API | R-AUD-2, R-SEND-3 | ⏳ |
+| 7 | `campaign` paketi | Durum makinesi, `partial` onayı, kanal seçimi, onay anında snapshot (`deliveries`), HTTP API | R-AUD-2, R-SEND-3 | ✅ |
 | 8 | Mock provider | Hata, gecikme ve 429 enjeksiyonu; kayan pencere limiti; idempotency anahtarları; istatistik endpoint'i | R-MOCK-1, R-MOCK-2 | ⏳ |
 | 9 | `delivery` worker | Claim ve lease, retry/backoff, kanal başına limiter, izin tekrar kontrolü. Worker'ı öldürüp yeniden başlatan test | R-SEND-1..4 | ⏳ |
 | 10 | Gözlemlenebilirlik | `/metrics`, `/healthz`, `/readyz`, dashboard SSE akışı | R-OBS-1..3 | ⏳ |
@@ -122,3 +122,35 @@ Puanlama, kuralın seed'de döndürdüğü kullanıcı kümesiyle yapılır (bkz
   - Bilerek bozma kontrolleri: yarım UTF-8'i bekletme kapatılınca, surrogate eşleştirme kapatılınca ve SSE flush'ı kapatılınca ilgili testler kırıldı.
   - Mock modda API başlatılıp `curl` ile duman testi yapıldı. En kötü durum, veritabanındaki 31 karakterlik isimle hesaplandı.
   - DECISIONS D-CONTENT ve D-STREAM'e güncelleme eklendi.
+- **Adım 7 (2026-11-07):** `internal/campaign` paketi ve kampanya endpoint'leri eklendi. Gerçek API çağrısı yapılmadı.
+  - Durum makinesi: `draft → approved → sending → completed`. Geri dönüş veya adım atlama yok.
+  - `campaign.Service`:
+    - Brief'ten taslak (segment çıkarımı + kayıt).
+    - Kural ve içerik düzenleme (yalnızca `draft` iken).
+    - Kitle sayıları.
+    - Atomik onay ve snapshot.
+  - Kanal seçimi ve `partial` onayı onay isteğiyle gelir.
+  - En kötü durum hesabı artık kitleye özel. Ayrıntılar: DECISIONS D-PARTIAL, D-CHANNEL, D-CONTENT, D-DEDUP, D-SNAPSHOT.
+  - Endpoint'ler:
+    - `POST /api/campaigns`
+    - `GET /api/campaigns/{id}`
+    - `PUT /api/campaigns/{id}/rule`
+    - `PUT /api/campaigns/{id}/content`
+    - `POST /api/campaigns/{id}/content/generations`
+    - `POST /api/campaigns/{id}/approve`
+  - Eski `/api/content/generations` (POST) ve `/api/content/validate` kaldırıldı.
+  - Testler:
+    - Katman 1: durum geçişlerinin tamamı, onay ön koşulları, kanala göre içerik hatası filtresi.
+    - Katman 2:
+      - Snapshot sayısı taslakta gösterilen sayıya eşit.
+      - İzinsiz teslimat yok.
+      - Case kohortları doğru kanallarda.
+      - 8 paralel onaydan yalnızca biri başarılı.
+      - Reddedilen her onayda taslak ve boş `deliveries` korunuyor.
+      - Kitleye özel en kötü durum doğru hesaplanıyor.
+      - HTTP üzerinden uçtan uca akış ve hata kodları.
+  - Bilerek bozma:
+    - `status='draft'` koşulu kaldırılınca 2 test kırıldı (unique kısıt ikinci snapshot'ı yine engelledi).
+    - `partial` kontrolü kapatılınca 3 test kırıldı.
+  - Mock modda `curl` ile duman testi yapıldı: paralel iki onay `200` + `409` döndü, `deliveries` sayıları API ile aynı çıktı. Test kampanyası sonra silindi.
+  - Not: Sayılar seed'in üretildiği zamana göre kayar (case brief'i şu an SMS 111, email 118); "son N gün" penceresi gerçek saatle ilerler.

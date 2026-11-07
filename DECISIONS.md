@@ -68,6 +68,7 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Gerekçe:** Bir VE koşulunun düşmesi kitleyi her zaman genişletir, yani hedeflenenden fazla kişiye mesaj gider. Bu sessizce olmamalı.
 - **Alternatifler:** Yalnızca uyarı göstermek: gözden kaçabilir. `partial` sonucu tamamen reddetmek: yaklaşık ama kabul edilebilir kuralları da engeller.
 - **Sınırlar:** Onay kampanya kaydına zaman damgasıyla yazılır, ama uygulanmayan kriterlerin listesini ayrıca saklamayız.
+- **Güncelleme (2026-11-07, PLAN adım 7):** "Kriterler olmadan devam et" onayı ayrı bir endpoint değildir; onay isteğinin içinde (`partial_ack: true`) gönderilir. Böylece kaydedilen onay, düğmeye basıldığı anda ekranda görünenle aynıdır. Backend, `partial` bir kuralı bu alan olmadan onaylamaz (`partial_not_acknowledged`). Zaman damgası (`partial_ack_at`) yalnızca kural gerçekten `partial` ise ve onayla aynı transaction'da yazılır.
 
 ## D-CHANNEL: Kanal seçimi LLM'e bırakılmaz
 
@@ -75,6 +76,7 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Gerekçe:** Kanal seçimi deterministik ve insan kontrolünde olmalı. LLM'in yanlış yorumlaması mesajın gönderilmemesine ya da istenmeyen bir kanaldan gitmesine yol açar.
 - **Alternatifler:** Şemaya bir `channels` alanı eklemek: LLM hatasına açık.
 - **Sınırlar:** İzin kontrolü (R-AUD-2) kanal seçiminden bağımsız olarak her durumda derleyicide uygulanır. Arayüz her kanal için uygun kişi sayısını ayrıca gösterir.
+- **Güncelleme (2026-11-07, PLAN adım 7):** Kanal seçimi de onay isteğiyle gelir (`channels: {sms, email}`) ve onayla aynı atomik UPDATE'te kaydedilir. Seçilmeyen kanal için `deliveries` satırı yazılmaz ve o kanalın içeriği (ör. yalnızca SMS seçildiyse email konusu ve gövdesi) onayda kontrol edilmez. Hiç kanal seçilmezse onay reddedilir.
 
 ## D-CART: Örnek brief'in yorumu
 
@@ -169,6 +171,7 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - **Akış ayarları:** `http.ResponseController` ile her olay hemen flush edilir ve bu yanıt için yazma süre sınırı kaldırılır. 15 sn'de bir `: ping` yorumu gönderilir; `X-Accel-Buffering: no` başlığı nginx tamponlamasını kapatır.
   - **Log:** Her üretim sonunda sonuç, onarım sayısı, deneme sayısı, token ve süre loglanır. Brief ve üretilen metin loglanmaz.
   - **Mock rozeti:** `GET /api/info` hangi LLM sağlayıcısının (`mock` veya `anthropic`) kullanıldığını döner; arayüz buna göre rozet gösterir (D-LLM-MOCK).
+- **Güncelleme (2026-11-07, PLAN adım 7):** İçerik üretimi kampanyaya bağlandı: `POST /api/campaigns/{id}/content/generations`. Brief ve kural istemciden değil, kayıtlı taslaktan okunur. Olay akışı (`GET /api/content/generations/{id}/events`) değişmedi. `POST /api/content/generations` ve `POST /api/content/validate` kaldırıldı; içerik doğrulaması artık `PUT /api/campaigns/{id}/content` yanıtında döner.
 
 ## D-CONTENT: İçerik kuralları
 
@@ -187,6 +190,10 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - **Kişisel veri:** Claude'a en uzun değerlerin kendisi değil, yalnızca uzunlukları gönderilir. Doğrulama sonucu JSON'a çevrildiğinde de bu değerler çıktıya girmez (`json:"-"`), arayüz yalnızca karakter sayılarını görür.
   - **Ek kurallar:** Email konusu tek satır olmalıdır. Satır sonu ve sekme dışındaki kontrol karakterleri reddedilir. Alanların başındaki ve sonundaki boşluklar silinir ve sayılmaz. Email gövdesine 2000 karakter üst sınırı konuldu (case'te limit yok; kontrolden çıkmış bir üretimi durdurmak için).
   - **Değişken yazımı:** `{{ first_name }}` gibi süslü parantez içindeki boşluklara izin verilir. Kapatılmamış `{{`, açılışı olmayan `}}` ve büyük harfli ad (`{{FIRST_NAME}}`) hatadır. Tek süslü parantez (`{SEPET10}`) düz metindir.
+- **Güncelleme (2026-11-07, PLAN adım 7):** En kötü durum artık kampanyanın kitlesine göre hesaplanır:
+  - Taslakta içerik kaydedilirken ve üretilirken: kuralın SMS veya email ile ulaştığı kullanıcılar. Kanal onayda seçildiği için iki kanal birlikte sayılır. Kitle tanımlamayan bir kuralda yine tüm kullanıcılar kullanılır.
+  - Onayda: yazılan snapshot'taki kullanıcılar, yani mesajı gerçekten alacak kişiler.
+  - Örnek: Seed'deki 31 karakterlik isim İstanbul'da yaşıyor ama case kitlesinde değil. 130 karakterlik metin + `{{first_name}}` içeren bir SMS, İstanbul kitlesi için 161 karakter olduğundan reddedilir; case kitlesi için onaylanır.
 
 ## D-DEDUP: "Aynı kişiye aynı mesaj iki kez gitmez" (R-SEND-3)
 
@@ -204,6 +211,10 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - Aynı içerikle yeni bir kampanya açılırsa mesaj tekrar gönderilir.
   - Gerçek bir provider idempotency desteklemiyorsa garanti zayıflar.
   - Doğrulama mock provider'ın kayıtlarıyla yapılır: worker gönderim ortasında öldürülüp yeniden başlatılır ve her anahtar için tek teslimat olduğu kontrol edilir.
+- **Güncelleme (2026-11-07, PLAN adım 7):** Katman 1 ve 2 uygulandı (`campaign.Approve`).
+  - Onay tek bir transaction'dır: önce `UPDATE campaigns ... WHERE id=$1 AND status='draft' RETURNING ...` satırı kilitler; ardından kontroller, kanal başına `INSERT INTO deliveries ... SELECT` (kitle SQL'i `segment.CompileAudience`'tan gelir, izin filtresi dahil) ve snapshot üzerinde içerik kontrolü yapılır. Herhangi bir kontrol başarısız olursa her şey geri alınır.
+  - Eşzamanlı ikinci onay, kilidin açılmasını bekler, koşul artık tutmadığı için 0 satır günceller ve `409 not_draft` alır.
+  - Test: aynı taslak 8 paralel istekle onaylandı; tam olarak biri başarılı oldu, snapshot bir kez yazıldı. `status='draft'` koşulu bilerek kaldırılınca test kırıldı; bu durumda bile ikinci snapshot'ı unique kısıt engelledi.
 
 ## D-RETRY: Gönderim retry stratejisi (R-SEND-4)
 
@@ -239,6 +250,8 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Gerekçe:** Pazarlamacının onayladığı sayı ile gerçekte gönderilen sayı tutarlı kalır. "Son N gün" gibi göreli pencereler onay anına sabitlenir.
 - **Alternatifler:** Kitleyi gönderim anında yeniden hesaplamak: onaylanan sayı değişebilir.
 - **Sınırlar:** Onaydan sonra kitleye giren yeni kullanıcılar bu kampanyaya dahil edilmez.
+- **Güncelleme (2026-11-07, PLAN adım 7):** Snapshot'taki "son N gün" pencereleri onay anına (`approved_at`) sabitlenir. Taslakta gösterilen sayılar kural üzerinden canlı hesaplanır; onaydan sonra `deliveries` tablosundan okunur. Kitle boşsa onay reddedilir (`empty_audience`).
+  - **Sınır:** Kural doğrulamasının uyarıları (ör. kapsama uyarısı) yalnızca oluşturma ve kural düzenleme yanıtında döner, saklanmaz.
 
 ## D-OBS: Gözlemlenebilirlik (R-OBS-1..3)
 

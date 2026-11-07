@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/campaign"
-	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/content"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/httpapi"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/llm"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/platform"
@@ -52,12 +51,10 @@ func run(log *slog.Logger) error {
 	}
 
 	api := httpapi.New(httpapi.Config{
+		Campaigns:   campaign.NewService(db, client, time.Now),
 		LLM:         client,
 		LLMProvider: cfg.LLMProvider,
-		Longest: func(ctx context.Context) (content.Values, error) {
-			return campaign.LongestValues(ctx, db)
-		},
-		Log: log,
+		Log:         log,
 	})
 
 	mux := http.NewServeMux()

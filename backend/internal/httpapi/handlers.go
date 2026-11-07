@@ -13,17 +13,16 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/campaign"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/content"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/llm"
-	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/segment"
 )
 
-// Config wires the server. Longest returns the longest value of each
-// personalisation variable (campaign.LongestValues in production).
+// Config wires the server.
 type Config struct {
+	Campaigns   *campaign.Service
 	LLM         llm.Client
 	LLMProvider string // "mock" or "anthropic", shown as a badge in the UI
-	Longest     func(ctx context.Context) (content.Values, error)
 	Log         *slog.Logger
 	// GenerationTimeout bounds one content generation, repairs included.
 	// Zero means 3 minutes.
@@ -58,63 +57,26 @@ func New(cfg Config) *Server {
 // Register adds the API routes to mux.
 func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/info", s.info)
-	mux.HandleFunc("POST /api/content/generations", s.startGeneration)
+	mux.HandleFunc("POST /api/campaigns", s.createCampaign)
+	mux.HandleFunc("GET /api/campaigns/{id}", s.getCampaign)
+	mux.HandleFunc("PUT /api/campaigns/{id}/rule", s.updateRule)
+	mux.HandleFunc("PUT /api/campaigns/{id}/content", s.saveContent)
+	mux.HandleFunc("POST /api/campaigns/{id}/content/generations", s.startGeneration)
+	mux.HandleFunc("POST /api/campaigns/{id}/approve", s.approveCampaign)
 	mux.HandleFunc("GET /api/content/generations/{id}/events", s.generationEvents)
-	mux.HandleFunc("POST /api/content/validate", s.validateContent)
 }
 
 func (s *Server) info(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"llm_provider": s.cfg.LLMProvider})
 }
 
-// generationRequest is the body of POST /api/content/generations. The rule
-// is the one the marketer approved; it is validated again here because the
-// client is not trusted.
-type generationRequest struct {
-	Brief string       `json:"brief"`
-	Rule  segment.Rule `json:"rule"`
-}
-
-func (s *Server) startGeneration(w http.ResponseWriter, r *http.Request) {
-	var req generationRequest
-	if !decodeBody(w, r, &req) {
-		return
-	}
-	brief, err := llm.CheckBrief(req.Brief)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_brief", "Brief boş olamaz ve en fazla "+strconv.Itoa(llm.MaxBriefRunes)+" karakter olabilir.")
-		return
-	}
-	rule := segment.Validate(req.Rule)
-	if !rule.Approvable() {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
-			"error":   "invalid_rule",
-			"message": "Kural geçerli değil veya bir kitle tanımlamıyor.",
-			"issues":  nonNil(rule.Errors),
-		})
-		return
-	}
-	longest, err := s.cfg.Longest(r.Context())
-	if err != nil {
-		s.cfg.Log.Error("load longest values", "err", err)
-		writeError(w, http.StatusServiceUnavailable, "db_unavailable", "Veritabanına şu anda ulaşılamıyor.")
-		return
-	}
-
-	in := llm.ContentInput{
-		Brief:    brief,
-		Audience: segment.Summarize(rule.Rule).String(),
-		Notes:    rule.Rule.Notes,
-	}
+// launchGeneration starts a content generation in the background and
+// returns its id. The generation outlives the request that started it: the
+// client follows it through the events endpoint, and may reconnect.
+func (s *Server) launchGeneration(in llm.ContentInput, longest content.Values) string {
 	id, g := s.gens.create()
-	// The generation outlives this request: the client follows it through
-	// the events endpoint, and may reconnect.
 	go s.runGeneration(id, g, in, longest)
-
-	writeJSON(w, http.StatusAccepted, map[string]string{
-		"id":         id,
-		"events_url": "/api/content/generations/" + id + "/events",
-	})
+	return id
 }
 
 // SSE event names (D-STREAM).
@@ -231,28 +193,6 @@ func (s *Server) generationEvents(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-}
-
-// validateContent checks a marketer-edited message with the same rules as
-// generated copy (D-CONTENT).
-func (s *Server) validateContent(w http.ResponseWriter, r *http.Request) {
-	var m content.Message
-	if !decodeBody(w, r, &m) {
-		return
-	}
-	longest, err := s.cfg.Longest(r.Context())
-	if err != nil {
-		s.cfg.Log.Error("load longest values", "err", err)
-		writeError(w, http.StatusServiceUnavailable, "db_unavailable", "Veritabanına şu anda ulaşılamıyor.")
-		return
-	}
-	res := content.Validate(m, longest)
-	writeJSON(w, http.StatusOK, map[string]any{
-		"valid":   res.Valid(),
-		"message": res.Message,
-		"errors":  nonNil(res.Errors),
-		"stats":   res.Stats,
-	})
 }
 
 // decodeBody reads a size-limited JSON body strictly. It writes the error
