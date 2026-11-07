@@ -219,6 +219,58 @@ func TestCampaignContentValidation(t *testing.T) {
 	}
 }
 
+// TestCampaignStoredContentValidation: GET and rule edits return the
+// validation of the stored message against the current audience, so the UI
+// never shows a result computed for an older rule.
+func TestCampaignStoredContentValidation(t *testing.T) {
+	istanbul := `{"status":"ok","audience_scope":"filtered","common":[{"type":"attribute","field":"city","op":"in","values":["İstanbul"]}],"groups":[],"assumptions":[],"unsupported":[],"notes":[]}`
+	api, _ := newCampaignServer(t, llm.NewFake(llm.Text(istanbul)))
+	_, out := api.do("POST", "/api/campaigns", `{"brief":"İstanbul"}`)
+	c := campaignOf(t, out)
+	path := idPath(c)
+	if c["content_validation"] != nil {
+		t.Fatalf("draft without message has a validation: %v", c["content_validation"])
+	}
+
+	// 130 runes + {{first_name}}: too long with the 31-rune name of the
+	// İstanbul audience, fits the case audience (D-CONTENT example).
+	m := goodMessage
+	m.SMS = "{{first_name}}" + strings.Repeat("a", 130)
+	api.do("PUT", path+"/content", messageText(t, m))
+
+	validation := func(out map[string]any) map[string]any {
+		t.Helper()
+		v, ok := campaignOf(t, out)["content_validation"].(map[string]any)
+		if !ok {
+			t.Fatalf("no content_validation in %v", out)
+		}
+		return v
+	}
+	_, out = api.do("GET", path, "")
+	if v := validation(out); v["valid"] != false || len(v["errors"].([]any)) != 1 {
+		t.Fatalf("İstanbul audience: %v", v)
+	}
+	status, out := api.do("PUT", path+"/rule", `{"rule":`+caseRuleJSON+`}`)
+	if v := validation(out); status != http.StatusOK || v["valid"] != true {
+		t.Fatalf("case audience after rule edit: %d %v", status, v)
+	}
+	sms := validation(out)["stats"].(map[string]any)["sms"].(map[string]any)
+	if sms["runes"].(float64) >= sms["worst_case_runes"].(float64) {
+		t.Errorf("worst case does not count the variable: %v", sms)
+	}
+	if strings.Contains(fmtAny(out), seed.LongestFirstName) {
+		t.Error("response exposes a customer name")
+	}
+
+	if status, _ := api.do("POST", path+"/approve", `{"channels":{"sms":true,"email":true}}`); status != http.StatusOK {
+		t.Fatalf("approve: %d", status)
+	}
+	_, out = api.do("GET", path, "")
+	if campaignOf(t, out)["content_validation"] != nil {
+		t.Error("approved campaign still reports a draft validation")
+	}
+}
+
 func TestCampaignErrors(t *testing.T) {
 	rejected := `{"status":"rejected","audience_scope":"filtered","common":[],"groups":[],"assumptions":[],"unsupported":[{"text":"x","reason":"off_topic","group":null}],"notes":[]}`
 	partial := `{"status":"partial","audience_scope":"filtered","common":[{"type":"attribute","field":"city","op":"in","values":["İzmir"]}],"groups":[],"assumptions":[],"unsupported":[{"text":"en az 3 kez","reason":"aggregate","group":null}],"notes":[]}`

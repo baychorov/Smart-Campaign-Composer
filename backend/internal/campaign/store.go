@@ -163,6 +163,24 @@ func (s *Service) SaveContent(ctx context.Context, id int64, m content.Message) 
 	return c, res, err
 }
 
+// ContentValidation validates the stored message of a draft against the
+// longest values of its current audience, the same check SaveContent makes.
+// The rule may have changed since the message was saved, so the UI reads
+// this instead of keeping an old result. ok is false for a non-draft or a
+// draft without any message text yet.
+func (s *Service) ContentValidation(ctx context.Context, c Campaign) (res content.Result, ok bool, err error) {
+	if c.Status != StatusDraft || c.Message == (content.Message{}) {
+		return content.Result{}, false, nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, dbTimeout)
+	defer cancel()
+	longest, err := s.audienceLongest(ctx, c.Rule)
+	if err != nil {
+		return content.Result{}, false, err
+	}
+	return content.Validate(c.Message, longest), true, nil
+}
+
 // GenerationInput returns what content generation needs for a draft: the
 // model input and the longest values of its audience.
 func (s *Service) GenerationInput(ctx context.Context, id int64) (llm.ContentInput, content.Values, error) {

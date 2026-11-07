@@ -28,6 +28,20 @@ type campaignView struct {
 	CreatedAt    time.Time          `json:"created_at"`
 	UpdatedAt    time.Time          `json:"updated_at"`
 	Audience     *campaign.Audience `json:"audience"` // null when the rule has no audience
+	// ContentValidation checks the stored message against the current
+	// audience; null for a non-draft or a draft without message text.
+	ContentValidation *contentValidation `json:"content_validation"`
+}
+
+// contentValidation is the JSON shape of a content.Result.
+type contentValidation struct {
+	Valid  bool                          `json:"valid"`
+	Errors []content.Issue               `json:"errors"`
+	Stats  map[string]content.FieldStats `json:"stats"`
+}
+
+func toContentValidation(res content.Result) *contentValidation {
+	return &contentValidation{Valid: res.Valid(), Errors: nonNil(res.Errors), Stats: res.Stats}
 }
 
 type channels struct {
@@ -58,6 +72,13 @@ func (s *Server) view(ctx context.Context, c campaign.Campaign) (campaignView, e
 	}
 	if ok {
 		out.Audience = &a
+	}
+	res, ok, err := s.cfg.Campaigns.ContentValidation(ctx, c)
+	if err != nil {
+		return campaignView{}, err
+	}
+	if ok {
+		out.ContentValidation = toContentValidation(res)
 	}
 	return out, nil
 }
@@ -220,11 +241,7 @@ func (s *Server) saveContent(w http.ResponseWriter, r *http.Request) {
 		s.writeCampaignError(w, err)
 		return
 	}
-	s.writeCampaign(w, r, http.StatusOK, c, map[string]any{"validation": map[string]any{
-		"valid":  res.Valid(),
-		"errors": nonNil(res.Errors),
-		"stats":  res.Stats,
-	}})
+	s.writeCampaign(w, r, http.StatusOK, c, map[string]any{"validation": toContentValidation(res)})
 }
 
 // startGeneration: POST /api/campaigns/{id}/content/generations. The brief
