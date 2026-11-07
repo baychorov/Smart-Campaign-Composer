@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/campaign"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/content"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/llm"
@@ -20,7 +22,9 @@ import (
 
 // Config wires the server.
 type Config struct {
-	Campaigns   *campaign.Service
+	Campaigns *campaign.Service
+	// Metrics receives the LLM metrics; nil keeps them unexported.
+	Metrics     prometheus.Registerer
 	LLM         llm.Client
 	LLMProvider string // "mock" or "anthropic", shown as a badge in the UI
 	Log         *slog.Logger
@@ -34,6 +38,9 @@ type Config struct {
 type Server struct {
 	cfg  Config
 	gens *registry
+	llm  *llmMetrics
+	// progressEvery is the dashboard stream's update interval.
+	progressEvery time.Duration
 	// pingEvery is the SSE keep-alive interval.
 	pingEvery time.Duration
 }
@@ -51,7 +58,8 @@ func New(cfg Config) *Server {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	return &Server{cfg: cfg, gens: newRegistry(generationTTL, cfg.Now), pingEvery: 15 * time.Second}
+	return &Server{cfg: cfg, gens: newRegistry(generationTTL, cfg.Now), llm: newLLMMetrics(cfg.Metrics),
+		pingEvery: 15 * time.Second, progressEvery: time.Second}
 }
 
 // Register adds the API routes to mux.
@@ -63,6 +71,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/campaigns/{id}/content", s.saveContent)
 	mux.HandleFunc("POST /api/campaigns/{id}/content/generations", s.startGeneration)
 	mux.HandleFunc("POST /api/campaigns/{id}/approve", s.approveCampaign)
+	mux.HandleFunc("GET /api/campaigns/{id}/events", s.campaignEvents)
 	mux.HandleFunc("GET /api/content/generations/{id}/events", s.generationEvents)
 }
 
@@ -97,7 +106,7 @@ func (s *Server) runGeneration(id string, g *generation, in llm.ContentInput, lo
 		g.append(toSSE(e), e.Type == llm.ContentValidated || e.Type == llm.ContentInvalid)
 	})
 
-	outcome := "validated"
+	outcome := "ok"
 	switch {
 	case err == nil:
 	case errors.Is(err, llm.ErrInvalidOutput):
@@ -108,6 +117,7 @@ func (s *Server) runGeneration(id string, g *generation, in llm.ContentInput, lo
 		g.append(sseEvent{Name: eventFailed, Data: mustJSON(map[string]string{"code": code, "message": msg})}, true)
 	}
 	// The brief and the text are not logged: they may contain personal data.
+	s.llm.observe(opContent, outcome, res.Attempts, res.Repairs, s.cfg.Now().Sub(start))
 	usage := res.Usage()
 	attrs := []any{"id", id, "outcome", outcome, "repairs", res.Repairs, "attempts", len(res.Attempts),
 		"input_tokens", usage.InputTokens, "output_tokens", usage.OutputTokens, "duration", s.cfg.Now().Sub(start)}

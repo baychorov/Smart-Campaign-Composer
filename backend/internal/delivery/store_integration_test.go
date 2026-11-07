@@ -3,11 +3,14 @@
 package delivery
 
 import (
+	"log/slog"
+	"maps"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/platform/pgtest"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/seed"
@@ -286,5 +289,44 @@ func TestFinishCampaigns(t *testing.T) {
 	finish()
 	if st := q.campaignStatus(t); st != "completed" {
 		t.Fatalf("campaign %s, want completed", st)
+	}
+}
+
+// TestQueueCollector: scc_deliveries reads open rows on every scrape.
+func TestQueueCollector(t *testing.T) {
+	q := newQueue(t, 60)
+	c := NewQueueCollector(q.pool, slog.New(slog.DiscardHandler))
+	gauge := func() map[string]float64 {
+		t.Helper()
+		reg := prometheus.NewRegistry()
+		reg.MustRegister(c)
+		mfs, err := reg.Gather()
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]float64{}
+		for _, mf := range mfs {
+			for _, m := range mf.GetMetric() {
+				key := ""
+				for _, l := range m.GetLabel() {
+					key += l.GetValue() + "/"
+				}
+				out[key] = m.GetGauge().GetValue()
+			}
+		}
+		return out
+	}
+
+	want := map[string]float64{"sms/pending/": float64(q.sms), "sms/sending/": 0, "email/pending/": float64(q.email), "email/sending/": 0}
+	if got := gauge(); !maps.Equal(got, want) {
+		t.Fatalf("before claim %v, want %v", got, want)
+	}
+	now := later()
+	if _, err := NewPGStore(q.pool).Claim(t.Context(), ChannelSMS, 10, now, now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	want["sms/pending/"], want["sms/sending/"] = float64(q.sms-10), 10
+	if got := gauge(); !maps.Equal(got, want) {
+		t.Fatalf("after claim %v, want %v", got, want)
 	}
 }

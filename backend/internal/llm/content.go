@@ -107,6 +107,7 @@ func GenerateContent(ctx context.Context, c Client, in ContentInput, longest con
 			res.Issues = []content.Issue{{Code: IssueInvalidJSON, Message: "decode message: " + err.Error()}}
 		}
 
+		recordIssues(res.Attempts, res.Issues, func(i content.Issue) string { return i.Code })
 		if repair == MaxRepairs {
 			emit(ContentEvent{Type: ContentInvalid, Issues: res.Issues})
 			return res, fmt.Errorf("generate content: %w", ErrInvalidOutput)

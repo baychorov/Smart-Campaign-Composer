@@ -141,11 +141,14 @@ func (s *Server) createCampaign(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case err == nil:
+		s.llm.observe(opSegment, "ok", res.Attempts, res.Repairs, s.cfg.Now().Sub(start))
+		s.llm.ruleStatus.WithLabelValues(string(c.Rule.Status)).Inc()
 		s.cfg.Log.Info("segment extraction finished", append(attrs, "campaign_id", c.ID, "status", c.Rule.Status)...)
 		s.writeCampaign(w, r, http.StatusCreated, c, map[string]any{"warnings": nonNil(res.Validation.Warnings)})
 	case errors.Is(err, llm.ErrInvalidBrief):
 		writeError(w, http.StatusBadRequest, "invalid_brief", "Brief boş olamaz ve en fazla "+strconv.Itoa(llm.MaxBriefRunes)+" karakter olabilir.")
 	case errors.Is(err, llm.ErrInvalidOutput):
+		s.llm.observe(opSegment, "invalid", res.Attempts, res.Repairs, s.cfg.Now().Sub(start))
 		s.cfg.Log.Warn("segment extraction invalid", attrs...)
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
 			"error":   "invalid_rule",
@@ -154,6 +157,7 @@ func (s *Server) createCampaign(w http.ResponseWriter, r *http.Request) {
 		})
 	default:
 		code, msg := failure(err)
+		s.llm.observe(opSegment, code, res.Attempts, res.Repairs, s.cfg.Now().Sub(start))
 		s.cfg.Log.Warn("segment extraction failed", append(attrs, "code", code, "err", err)...)
 		status := http.StatusBadGateway
 		switch code {

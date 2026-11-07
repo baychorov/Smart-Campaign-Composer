@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -79,6 +80,11 @@ func TestExtractSegmentRepair(t *testing.T) {
 			}
 			if got := res.Validation.Rule.Common; len(got) != 1 || got[0].Values[0] != "İstanbul" {
 				t.Errorf("final rule = %+v", res.Validation.Rule)
+			}
+			// Each attempt keeps its own codes (for metrics): the first has
+			// the error, the repaired one none.
+			if len(res.Attempts) != 2 || !slices.Contains(res.Attempts[0].IssueCodes, tt.wantCode) || len(res.Attempts[1].IssueCodes) != 0 {
+				t.Errorf("attempt issue codes: %+v", res.Attempts)
 			}
 		})
 	}

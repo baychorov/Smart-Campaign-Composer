@@ -103,7 +103,7 @@ SELECT user_id FROM deliveries WHERE channel = 'sms' ORDER BY id LIMIT $1)`, wit
 	// Run 1: crashes after 150 recorded results.
 	ctx1, cancel1 := context.WithCancel(ctx)
 	crash := &crashingStore{Store: NewPGStore(q.pool), after: 150, cancel: cancel1}
-	New(crash, provider, cfg, log, nil, nil).Run(ctx1)
+	New(crash, provider, cfg, log, nil, nil, nil).Run(ctx1)
 
 	sentAfterCrash := q.count(t, `status = 'sent'`)
 	stuck := q.count(t, `status = 'sending'`)
@@ -118,7 +118,7 @@ SELECT user_id FROM deliveries WHERE channel = 'sms' ORDER BY id LIMIT $1)`, wit
 	// and the campaign is completed.
 	ctx2, cancel2 := context.WithCancel(ctx)
 	done := make(chan struct{})
-	go func() { New(NewPGStore(q.pool), provider, cfg, log, nil, nil).Run(ctx2); close(done) }()
+	go func() { New(NewPGStore(q.pool), provider, cfg, log, nil, nil, nil).Run(ctx2); close(done) }()
 	deadline := time.Now().Add(2 * time.Minute)
 	for q.count(t, `status IN ('pending', 'sending')`) > 0 || q.campaignStatus(t) != "completed" {
 		if time.Now().After(deadline) {

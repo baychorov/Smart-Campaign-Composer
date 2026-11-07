@@ -65,6 +65,21 @@ type Attempt struct {
 	StopReason StopReason
 	Usage      Usage
 	Error      string
+	// IssueCodes are the validation error codes of this attempt's output
+	// (invalid_json for undecodable output); empty when it was valid.
+	IssueCodes []string
+}
+
+// recordIssues stores the codes of the last attempt's validation errors.
+func recordIssues[T any](attempts []Attempt, issues []T, code func(T) string) {
+	if len(attempts) == 0 {
+		return
+	}
+	codes := make([]string, len(issues))
+	for i, is := range issues {
+		codes[i] = code(is)
+	}
+	attempts[len(attempts)-1].IssueCodes = codes
 }
 
 // SegmentResult is the outcome of ExtractSegment.
@@ -148,6 +163,7 @@ func ExtractSegment(ctx context.Context, c Client, brief string) (SegmentResult,
 			res.Issues = []segment.Issue{{Code: IssueInvalidJSON, Message: err.Error()}}
 		}
 
+		recordIssues(res.Attempts, res.Issues, func(i segment.Issue) string { return i.Code })
 		if repair == MaxRepairs {
 			return res, fmt.Errorf("extract segment: %w", ErrInvalidOutput)
 		}

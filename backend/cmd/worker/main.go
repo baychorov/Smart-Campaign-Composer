@@ -1,9 +1,11 @@
-// Command worker sends queued deliveries to the providers.
+// Command worker sends queued deliveries to the providers. It also serves
+// /healthz, /readyz and /metrics on WORKER_ADDR.
 package main
 
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -37,6 +39,9 @@ func run(log *slog.Logger) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// The HTTP server failing (e.g. port in use) stops the worker too.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	db, err := platform.OpenDB(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -44,14 +49,36 @@ func run(log *slog.Logger) error {
 	}
 	defer db.Close()
 
+	reg := platform.NewRegistry()
+	reg.MustRegister(delivery.NewQueueCollector(db, log))
+	metrics := delivery.NewMetrics(reg)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", platform.Healthz)
+	mux.HandleFunc("GET /readyz", platform.Readyz(db))
+	mux.Handle("GET /metrics", platform.MetricsHandler(reg))
+	srvErr := make(chan error, 1)
+	go func() {
+		srv := &http.Server{Addr: cfg.WorkerAddr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+		if err := platform.ServeHTTP(ctx, srv); err != nil {
+			srvErr <- err
+			cancel()
+		}
+	}()
+
 	w := delivery.New(
 		delivery.NewPGStore(db),
 		delivery.NewHTTPProvider(cfg.ProviderURL, providerTimeout),
-		wcfg, log, nil, nil,
+		wcfg, log, metrics, nil, nil,
 	)
 	log.Info("starting worker", "config", cfg, "send_rate", wcfg.Rate,
 		"concurrency", wcfg.Concurrency, "lease", wcfg.Lease.String())
 	w.Run(ctx)
+	select {
+	case err := <-srvErr:
+		return err
+	default:
+	}
 	log.Info("worker stopped gracefully")
 	return nil
 }

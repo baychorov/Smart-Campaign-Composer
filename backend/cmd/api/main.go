@@ -50,8 +50,10 @@ func run(log *slog.Logger) error {
 		client = llm.NewDemo()
 	}
 
+	reg := platform.NewRegistry()
 	api := httpapi.New(httpapi.Config{
 		Campaigns:   campaign.NewService(db, client, time.Now),
+		Metrics:     reg,
 		LLM:         client,
 		LLMProvider: cfg.LLMProvider,
 		Log:         log,
@@ -59,13 +61,15 @@ func run(log *slog.Logger) error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", platform.Healthz)
+	mux.HandleFunc("GET /readyz", platform.Readyz(db))
+	mux.Handle("GET /metrics", platform.MetricsHandler(reg))
 	api.Register(mux)
 
 	log.Info("starting api", "config", cfg)
 	// No WriteTimeout: SSE responses are long-lived (D-STREAM).
 	return platform.ServeHTTP(ctx, &http.Server{
 		Addr:              cfg.APIAddr,
-		Handler:           mux,
+		Handler:           platform.NewHTTPMetrics(reg).Wrap(mux),
 		ReadHeaderTimeout: 10 * time.Second,
 	})
 }

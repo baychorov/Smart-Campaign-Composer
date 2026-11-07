@@ -33,6 +33,7 @@ func TestFromEnv(t *testing.T) {
 				APIAddr:          ":8080",
 				MockProviderAddr: ":8090",
 				ProviderURL:      defaultProviderURL,
+				WorkerAddr:       ":8081",
 			},
 		},
 		{
@@ -44,6 +45,7 @@ func TestFromEnv(t *testing.T) {
 				"MOCK_PROVIDER_ADDR": ":9001",
 				"ANTHROPIC_BASE_URL": "http://127.0.0.1:9999",
 				"PROVIDER_URL":       "http://mock:9001",
+				"WORKER_ADDR":        ":9002",
 			},
 			want: Config{
 				DatabaseURL:      "postgres://u:p@db:5432/x",
@@ -53,6 +55,7 @@ func TestFromEnv(t *testing.T) {
 				APIAddr:          ":9000",
 				MockProviderAddr: ":9001",
 				ProviderURL:      "http://mock:9001",
+				WorkerAddr:       ":9002",
 			},
 		},
 		{
@@ -66,6 +69,7 @@ func TestFromEnv(t *testing.T) {
 				APIAddr:          ":8080",
 				MockProviderAddr: ":8090",
 				ProviderURL:      defaultProviderURL,
+				WorkerAddr:       ":8081",
 			},
 		},
 		{

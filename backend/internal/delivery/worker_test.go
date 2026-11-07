@@ -9,6 +9,9 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 // Layer 1: the worker against an in-memory Store and a scripted Provider,
@@ -194,7 +197,7 @@ func TestRateLimit(t *testing.T) {
 		}
 		p := &fakeProvider{reply: accept}
 		start := time.Now()
-		runUntilDone(t, New(s, p, testConfig(), discard(), nil, nil), s)
+		runUntilDone(t, New(s, p, testConfig(), discard(), nil, nil, nil), s)
 
 		if took := time.Since(start); took < 2400*time.Millisecond || took > 3*time.Second {
 			t.Errorf("500 messages over two channels took %s, want ~2.5 s", took)
@@ -254,7 +257,18 @@ func TestDecisionsApplied(t *testing.T) {
 		}}
 		logs := &bytes.Buffer{}
 		log := slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
-		runUntilDone(t, New(s, p, testConfig(), log, nil, nil), s)
+		m := NewMetrics(prometheus.NewRegistry())
+		runUntilDone(t, New(s, p, testConfig(), log, m, nil, nil), s)
+
+		// Metrics: one count per processed claim.
+		for result, want := range map[string]float64{"sent": 2, "retry": 5, "throttled": 1, "failed": 2, "skipped": 1, "release": 0} {
+			if got := testutil.ToFloat64(m.results.WithLabelValues("sms", result)); got != want {
+				t.Errorf("results{sms,%s} = %v, want %v", result, got, want)
+			}
+		}
+		if n := testutil.CollectAndCount(m.providerDuration); n != 3 {
+			t.Errorf("%d provider duration series, want 3 (2xx, 4xx incl. 429, 5xx)", n)
+		}
 
 		rows := s.snapshot()
 		want := map[int64]struct {
@@ -304,7 +318,7 @@ func TestGracefulShutdown(t *testing.T) {
 		}}
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		go func() { New(s, p, testConfig(), discard(), nil, nil).Run(ctx); close(done) }()
+		go func() { New(s, p, testConfig(), discard(), nil, nil, nil).Run(ctx); close(done) }()
 		time.Sleep(250 * time.Millisecond)
 		cancel()
 		<-done
@@ -350,7 +364,7 @@ func TestUnrecordedSendIsResent(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		go func() { New(recordFailStore{s}, p, cfg, discard(), nil, nil).Run(ctx); close(done) }()
+		go func() { New(recordFailStore{s}, p, cfg, discard(), nil, nil, nil).Run(ctx); close(done) }()
 		time.Sleep(time.Second)
 		cancel()
 		<-done
@@ -359,7 +373,7 @@ func TestUnrecordedSendIsResent(t *testing.T) {
 		}
 
 		start := time.Now()
-		runUntilDone(t, New(s, p, cfg, discard(), nil, nil), s)
+		runUntilDone(t, New(s, p, cfg, discard(), nil, nil, nil), s)
 		c := p.callsFor("7")
 		if len(c) != 2 || c[1].at.Sub(start) < 29*time.Second {
 			t.Fatalf("resend: %d calls, second %s after restart (lease 30s)", len(c), c[len(c)-1].at.Sub(start))

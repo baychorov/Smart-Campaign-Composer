@@ -27,6 +27,7 @@ const (
 	defaultAPIAddr          = ":8080"
 	defaultMockProviderAddr = ":8090"
 	defaultProviderURL      = "http://localhost:8090"
+	defaultWorkerAddr       = ":8081"
 )
 
 // ErrInvalidConfig is wrapped by every validation error returned from FromEnv.
@@ -64,6 +65,8 @@ type Config struct {
 	MockProviderAddr string
 	// ProviderURL is where the worker sends messages (the mock provider).
 	ProviderURL string
+	// WorkerAddr serves the worker's /healthz, /readyz and /metrics.
+	WorkerAddr string
 }
 
 // Load reads an optional .env file into the process environment (existing
@@ -101,6 +104,7 @@ func FromEnv(getenv func(string) string) (Config, error) {
 		APIAddr:          get("API_ADDR", defaultAPIAddr),
 		MockProviderAddr: get("MOCK_PROVIDER_ADDR", defaultMockProviderAddr),
 		ProviderURL:      get("PROVIDER_URL", defaultProviderURL),
+		WorkerAddr:       get("WORKER_ADDR", defaultWorkerAddr),
 	}
 
 	switch cfg.LLMProvider {
@@ -136,6 +140,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("api_addr", c.APIAddr),
 		slog.String("mock_provider_addr", c.MockProviderAddr),
 		slog.String("provider_url", c.ProviderURL),
+		slog.String("worker_addr", c.WorkerAddr),
 	)
 }
 

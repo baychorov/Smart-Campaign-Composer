@@ -4,6 +4,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -13,9 +14,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/campaign"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/content"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/llm"
+	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/platform"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/platform/pgtest"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/seed"
 )
@@ -47,9 +53,18 @@ func (c apiClient) do(method, path, body string) (int, map[string]any) {
 	return resp.StatusCode, out
 }
 
-// newCampaignServer starts the API on a seeded database. fake answers the
-// model calls in order.
-func newCampaignServer(t *testing.T, fake *llm.Fake) (apiClient, *bytes.Buffer) {
+// campaignEnv is the API on a seeded database, wired like cmd/api:
+// metrics registry, HTTP metrics middleware and /metrics.
+type campaignEnv struct {
+	api  apiClient
+	logs *bytes.Buffer
+	pool *pgxpool.Pool
+	srv  *Server
+	reg  *prometheus.Registry
+}
+
+// newCampaignEnv starts the API. fake answers the model calls in order.
+func newCampaignEnv(t *testing.T, fake *llm.Fake) campaignEnv {
 	t.Helper()
 	pool := pgtest.NewDB(t)
 	if err := seed.Insert(t.Context(), pool, seed.Generate(seed.DefaultSeed, 2000, seedNow)); err != nil {
@@ -57,19 +72,30 @@ func newCampaignServer(t *testing.T, fake *llm.Fake) (apiClient, *bytes.Buffer) 
 	}
 	logs := &bytes.Buffer{}
 	now := func() time.Time { return seedNow }
-	api := New(Config{
+	reg := platform.NewRegistry()
+	srv := New(Config{
 		Campaigns:         campaign.NewService(pool, fake, now),
+		Metrics:           reg,
 		LLM:               fake,
 		LLMProvider:       "mock",
 		Log:               slog.New(slog.NewJSONHandler(logs, nil)),
 		GenerationTimeout: 10 * time.Second,
 		Now:               now,
 	})
+	srv.progressEvery = 20 * time.Millisecond
 	mux := http.NewServeMux()
-	api.Register(mux)
-	srv := httptest.NewServer(mux)
-	t.Cleanup(srv.Close)
-	return apiClient{t: t, url: srv.URL}, logs
+	mux.Handle("GET /metrics", platform.MetricsHandler(reg))
+	srv.Register(mux)
+	ts := httptest.NewServer(platform.NewHTTPMetrics(reg).Wrap(mux))
+	t.Cleanup(ts.Close)
+	return campaignEnv{api: apiClient{t: t, url: ts.URL}, logs: logs, pool: pool, srv: srv, reg: reg}
+}
+
+// newCampaignServer is newCampaignEnv for tests that need only the client.
+func newCampaignServer(t *testing.T, fake *llm.Fake) (apiClient, *bytes.Buffer) {
+	t.Helper()
+	env := newCampaignEnv(t, fake)
+	return env.api, env.logs
 }
 
 func campaignOf(t *testing.T, out map[string]any) map[string]any {
@@ -203,7 +229,8 @@ func TestCampaignErrors(t *testing.T) {
 		llm.Text(invalid), llm.Text(invalid), llm.Text(invalid), // extraction gives up after repairs
 		llm.FakeResponse{StopReason: llm.StopRefusal, Refusal: &llm.Refusal{Explanation: "Politika."}},
 	)
-	api, _ := newCampaignServer(t, fake)
+	env := newCampaignEnv(t, fake)
+	api := env.api
 
 	// Rejected rule: stored as a draft, but no audience and no generation.
 	status, out := api.do("POST", "/api/campaigns", `{"brief":"Python sıralama algoritması yaz"}`)
@@ -263,5 +290,106 @@ func TestCampaignErrors(t *testing.T) {
 	// model by mistake, and every failed extraction stored nothing.
 	if n := len(fake.Calls()); n != 6 {
 		t.Errorf("%d model calls, want 6", n)
+	}
+
+	// Segment metrics: two extractions stored a rule, one gave up after
+	// repairs, one was refused. Invalid briefs never reached the model.
+	m := env.srv.llm
+	for _, tt := range []struct {
+		name string
+		c    prometheus.Collector
+		want float64
+	}{
+		{"ok", m.requests.WithLabelValues(opSegment, "ok"), 2},
+		{"invalid", m.requests.WithLabelValues(opSegment, "invalid"), 1},
+		{"refusal", m.requests.WithLabelValues(opSegment, "refusal"), 1},
+		{"repairs", m.repairs.WithLabelValues(opSegment), llm.MaxRepairs},
+		{"rejected rules", m.ruleStatus.WithLabelValues("rejected"), 1},
+		{"partial rules", m.ruleStatus.WithLabelValues("partial"), 1},
+	} {
+		if got := testutil.ToFloat64(tt.c); got != tt.want {
+			t.Errorf("%s = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+	if n := testutil.CollectAndCount(m.requests); n != 3 {
+		t.Errorf("%d request series, want 3", n)
+	}
+	if got := testutil.ToFloat64(m.validationErrors); got < float64(llm.MaxRepairs+1) {
+		t.Errorf("validation errors %v, want at least one per invalid attempt", got)
+	}
+}
+
+// TestCampaignProgressStream: the dashboard stream sends the summary
+// repeatedly and closes after the campaign is completed (R-OBS-1).
+func TestCampaignProgressStream(t *testing.T) {
+	env := newCampaignEnv(t, llm.NewFake(llm.Text(caseRuleJSON)))
+	_, out := env.api.do("POST", "/api/campaigns", `{"brief":"İstanbul sepet hatırlatma"}`)
+	path := idPath(campaignOf(t, out))
+	env.api.do("PUT", path+"/content", messageText(t, goodMessage))
+	if status, out := env.api.do("POST", path+"/approve", `{"channels":{"sms":true,"email":true}}`); status != http.StatusOK {
+		t.Fatalf("approve: %d %v", status, out)
+	}
+
+	// Finish the campaign a little later, as the worker would.
+	id := campaignOf(t, out)["id"]
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		_, _ = env.pool.Exec(t.Context(), `UPDATE deliveries SET status = 'sent', sent_at = $2 WHERE campaign_id = $1`, id, seedNow)
+		_, _ = env.pool.Exec(t.Context(), `UPDATE campaigns SET status = 'completed' WHERE id = $1`, id)
+	}()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, env.api.url+path+"/events", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.Header.Get("Content-Type") != "text/event-stream" {
+		t.Fatalf("content type %q", resp.Header.Get("Content-Type"))
+	}
+	evs := readEvents(t, resp.Body) // returns when the stream closes
+	if ctx.Err() != nil {
+		t.Fatal("stream did not close after completion; the client timeout ended it")
+	}
+	if len(evs) < 3 {
+		t.Fatalf("%d events, want several updates before completion", len(evs))
+	}
+	first, last := evs[0].Data, evs[len(evs)-1].Data
+	if first["status"] != "approved" || first["done"] != false {
+		t.Fatalf("first event %v", first)
+	}
+	sms := last["channels"].(map[string]any)["sms"].(map[string]any)
+	if last["status"] != "completed" || last["done"] != true || sms["sent"] != sms["total"] || sms["pending"] != float64(0) {
+		t.Fatalf("last event %v", last)
+	}
+	for i, e := range evs {
+		if e.Name != "progress" || e.ID != fmtAny(i) {
+			t.Fatalf("event %d: %s id %s", i, e.Name, e.ID)
+		}
+	}
+
+	if status, out := env.api.do("GET", "/api/campaigns/999999/events", ""); status != http.StatusNotFound || out["error"] != "not_found" {
+		t.Fatalf("unknown campaign: %d %v", status, out)
+	}
+
+	// /metrics: route patterns as labels, no brief text, names or ids.
+	r, err := http.Get(env.api.url + "/metrics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(r.Body)
+	r.Body.Close()
+	metrics := string(body)
+	for _, want := range []string{`route="GET /api/campaigns/{id}/events"`, `route="POST /api/campaigns/{id}/approve"`, "scc_llm_requests_total", "go_goroutines"} {
+		if !strings.Contains(metrics, want) {
+			t.Errorf("/metrics lacks %s", want)
+		}
+	}
+	for _, leak := range []string{"sepet", seed.LongestFirstName, path} {
+		if strings.Contains(metrics, leak) {
+			t.Errorf("/metrics contains %q", leak)
+		}
 	}
 }

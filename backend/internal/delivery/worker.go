@@ -49,20 +49,25 @@ type Worker struct {
 	provider Provider
 	cfg      Config
 	log      *slog.Logger
+	metrics  *Metrics
 	now      func() time.Time
 	rnd      func() float64
 	limiters map[Channel]*rate.Limiter
 }
 
-// New builds a Worker. now and rnd may be nil (time.Now, rand.Float64).
-func New(store Store, provider Provider, cfg Config, log *slog.Logger, now func() time.Time, rnd func() float64) *Worker {
+// New builds a Worker. metrics, now and rnd may be nil (unexported
+// metrics, time.Now, rand.Float64).
+func New(store Store, provider Provider, cfg Config, log *slog.Logger, metrics *Metrics, now func() time.Time, rnd func() float64) *Worker {
+	if metrics == nil {
+		metrics = NewMetrics(nil)
+	}
 	if now == nil {
 		now = time.Now
 	}
 	if rnd == nil {
 		rnd = rand.Float64
 	}
-	w := &Worker{store: store, provider: provider, cfg: cfg, log: log, now: now, rnd: rnd, limiters: map[Channel]*rate.Limiter{}}
+	w := &Worker{store: store, provider: provider, cfg: cfg, log: log, metrics: metrics, now: now, rnd: rnd, limiters: map[Channel]*rate.Limiter{}}
 	for _, ch := range Channels {
 		w.limiters[ch] = rate.NewLimiter(rate.Limit(cfg.Rate), 1)
 	}
@@ -162,7 +167,9 @@ func (w *Worker) process(ctx context.Context, j Job) {
 	// abandoned request would leave its outcome unknown. The provider's own
 	// timeout bounds it.
 	sendCtx := context.WithoutCancel(ctx)
+	start := time.Now()
 	res := w.provider.Send(sendCtx, msg)
+	w.metrics.providerDuration.WithLabelValues(string(j.Channel), statusClass(res)).Observe(time.Since(start).Seconds())
 	w.complete(sendCtx, j, w.cfg.Retry.Decide(res, j, w.rnd))
 }
 
@@ -178,16 +185,23 @@ func (w *Worker) complete(ctx context.Context, j Job, d Decision) {
 	// Delivery id and outcome only: never the recipient or the text.
 	attrs := []any{"delivery_id", j.ID, "campaign_id", j.CampaignID, "channel", j.Channel,
 		"decision", d.Kind, "attempts", j.Attempts, "error", d.Error}
+	ch := string(j.Channel)
 	switch {
 	case err != nil:
+		w.metrics.recordErrors.WithLabelValues(ch).Inc()
 		w.log.Error("record delivery result", append(attrs, "err", err)...)
+		return
 	case !ok:
+		w.metrics.leaseLost.WithLabelValues(ch).Inc()
 		w.log.Warn("delivery lease lost, result dropped", attrs...)
-	case d.Kind == KindFailed:
-		w.log.Warn("delivery failed", attrs...)
-	default:
-		w.log.Debug("delivery processed", attrs...)
+		return
 	}
+	w.metrics.results.WithLabelValues(ch, resultLabel(d)).Inc()
+	if d.Kind == KindFailed {
+		w.log.Warn("delivery failed", attrs...)
+		return
+	}
+	w.log.Debug("delivery processed", attrs...)
 }
 
 // render fills the campaign templates for one recipient.

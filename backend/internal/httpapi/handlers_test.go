@@ -16,6 +16,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/campaign"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/content"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/llm"
@@ -264,7 +267,7 @@ func TestGenerationStream(t *testing.T) {
 	// The log line has usage but no brief or text. It is written after the
 	// terminal event, so wait for it.
 	logs := s.logs.wait(t)
-	if !strings.Contains(logs, `"outcome":"validated"`) || strings.Contains(logs, "sepet terk") || strings.Contains(logs, "SEPET10") {
+	if !strings.Contains(logs, `"outcome":"ok"`) || strings.Contains(logs, "sepet terk") || strings.Contains(logs, "SEPET10") {
 		t.Errorf("log line: %s", logs)
 	}
 }
@@ -417,5 +420,43 @@ func TestInfo(t *testing.T) {
 	_ = json.NewDecoder(resp.Body).Decode(&out)
 	if out["llm_provider"] != "mock" {
 		t.Fatalf("info %v", out)
+	}
+}
+
+// TestContentMetrics: one count per generation, with repairs, validation
+// codes of every attempt and tokens. They are recorded right before the
+// log line, so the test waits for it.
+func TestContentMetrics(t *testing.T) {
+	bad := goodMessage
+	bad.SMS = "{{soyad}}"
+	usage := llm.Usage{InputTokens: 100, OutputTokens: 40}
+	var replies []llm.FakeResponse
+	for range llm.MaxRepairs + 1 {
+		replies = append(replies, llm.FakeResponse{Chunks: []string{messageText(t, bad)}, Usage: usage})
+	}
+	replies = append(replies, llm.FakeResponse{Chunks: []string{messageText(t, goodMessage)}, Usage: usage})
+	s := newTestServer(t, llm.NewFake(replies...))
+
+	s.events(t, s.start(t, "brief", caseRuleJSON), "") // invalid after repairs
+	s.logs.wait(t)
+	s.events(t, s.start(t, "brief", caseRuleJSON), "") // ok
+	s.logs.wait(t)
+
+	m := s.api.llm
+	for _, tt := range []struct {
+		name string
+		c    prometheus.Collector
+		want float64
+	}{
+		{"invalid", m.requests.WithLabelValues(opContent, "invalid"), 1},
+		{"ok", m.requests.WithLabelValues(opContent, "ok"), 1},
+		{"repairs", m.repairs.WithLabelValues(opContent), llm.MaxRepairs},
+		{"unknown_variable", m.validationErrors.WithLabelValues(opContent, content.CodeUnknownVariable), llm.MaxRepairs + 1},
+		{"input tokens", m.tokens.WithLabelValues(opContent, "input"), 400},
+		{"output tokens", m.tokens.WithLabelValues(opContent, "output"), 160},
+	} {
+		if got := testutil.ToFloat64(tt.c); got != tt.want {
+			t.Errorf("%s = %v, want %v", tt.name, got, tt.want)
+		}
 	}
 }
