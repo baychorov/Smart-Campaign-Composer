@@ -161,6 +161,14 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Gerekçe:** Akış tek yönlü ve SSE düz HTTP üzerinde çalışır. Akan metin yalnızca bir aday olarak gösterilir; doğrulanan ve gösterilen metin aynıdır. Özet gönderen bir dashboard yeniden bağlanmada kendiliğinden doğru duruma gelir, ayrı bir pub/sub gerekmez.
 - **Alternatifler:** WebSocket: çift yönlü iletişime burada gerek yok. Polling: token akışı için kötü. Kısmi JSON'u frontend'de parse etmek: mantık tarayıcıya kayar ve testi zorlaşır. Düz metin akışı + ikinci bir JSON çağrısı: gösterilen ve doğrulanan içerik farklı olabilir.
 - **Sınırlar:** Üretim olayları bellekte tutulur ve tek API replikası varsayılır. Go'da `http.Flusher` kullanılır, sunucunun `WriteTimeout` değeri akışı kesmeyecek şekilde ayarlanır ve nginx'te buffering kapatılır.
+- **Güncelleme (2026-11-07, PLAN adım 6):**
+  - **Endpoint'ler:** `POST /api/content/generations` (`{brief, rule}` → `202 {id, events_url}`) ve `GET /api/content/generations/{id}/events`. Kural istemciden geldiği için sunucuda yeniden doğrulanır; onaylanamayan kural 422 alır ve model çağrılmaz.
+  - **Olay adları:** `started`, `sms.delta`, `email.subject.delta`, `email.body.delta` (`{"text": …}`), `reset`, `validated` (`{message, stats}`), `invalid` (`{issues}`) ve `failed` (`{code, message}`; refusal, zaman aşımı veya API hatası için). Son üç olaydan biri geldiğinde akış kapanır.
+  - **Yeniden bağlanma:** Her olayın sıra numarası SSE `id` alanında gönderilir. Tarayıcının `EventSource`'u bağlantı koptuğunda `Last-Event-ID` başlığını otomatik gönderir; sunucu o noktadan devam eder. Üretim isteği yapan bağlantıdan bağımsız çalışır ve kendi zaman sınırı vardır (3 dk). İstemcinin kopması üretimi iptal etmez. Biten üretimler 30 dk sonra bellekten silinir.
+  - **Delta sırası:** Delta'lar alanların modelin yazdığı sırayla gelir (gözlemlenen sıra alfabetik). Arayüz her olayı alan adına göre ilgili kutuya yazar, sıraya güvenmez.
+  - **Akış ayarları:** `http.ResponseController` ile her olay hemen flush edilir ve bu yanıt için yazma süre sınırı kaldırılır. 15 sn'de bir `: ping` yorumu gönderilir; `X-Accel-Buffering: no` başlığı nginx tamponlamasını kapatır.
+  - **Log:** Her üretim sonunda sonuç, onarım sayısı, deneme sayısı, token ve süre loglanır. Brief ve üretilen metin loglanmaz.
+  - **Mock rozeti:** `GET /api/info` hangi LLM sağlayıcısının (`mock` veya `anthropic`) kullanıldığını döner; arayüz buna göre rozet gösterir (D-LLM-MOCK).
 
 ## D-CONTENT: İçerik kuralları
 
@@ -173,6 +181,12 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Gerekçe:** Go'da `len()` byte sayar; Türkçe karakterlerde bu yanlış sonuç verir. Kısa bir `{{first_name}}` şablonu render sonrası limiti aşabilir. Düz metin email XSS riski taşımaz.
 - **Alternatifler:** GSM-7/UCS-2 segment hesabı: gerçek SMS maliyetini yansıtır, ama case "karakter" diyor.
 - **Sınırlar:** Türkçe karakter içeren gerçek bir SMS'te tek segment limiti 70 karakterdir; bu fark not edilir, uygulanmaz.
+- **Güncelleme (2026-11-07, PLAN adım 6):**
+  - **Yedek değer:** Boş `first_name` yerine "Değerli Müşterimiz" yazılır (kullanıcı onayı). En kötü durum hesabında bir değişken, en uzun değer ile yedek metinden hangisi uzunsa o kadar yer kaplar.
+  - **En kötü durumun kapsamı:** Şimdilik en uzun isim ve şehir bütün `users` tablosundan alınır (`campaign.LongestValues`). Kitle bu tablonun alt kümesi olduğu için sonuç hiçbir zaman olduğundan düşük çıkmaz, ama bazen gereğinden katıdır. Kitleye özel hesap, kampanya kaydıyla birlikte adım 7'de eklenir (kullanıcı onayı).
+  - **Kişisel veri:** Claude'a en uzun değerlerin kendisi değil, yalnızca uzunlukları gönderilir. Doğrulama sonucu JSON'a çevrildiğinde de bu değerler çıktıya girmez (`json:"-"`), arayüz yalnızca karakter sayılarını görür.
+  - **Ek kurallar:** Email konusu tek satır olmalıdır. Satır sonu ve sekme dışındaki kontrol karakterleri reddedilir. Alanların başındaki ve sonundaki boşluklar silinir ve sayılmaz. Email gövdesine 2000 karakter üst sınırı konuldu (case'te limit yok; kontrolden çıkmış bir üretimi durdurmak için).
+  - **Değişken yazımı:** `{{ first_name }}` gibi süslü parantez içindeki boşluklara izin verilir. Kapatılmamış `{{`, açılışı olmayan `}}` ve büyük harfli ad (`{{FIRST_NAME}}`) hatadır. Tek süslü parantez (`{SEPET10}`) düz metindir.
 
 ## D-DEDUP: "Aynı kişiye aynı mesaj iki kez gitmez" (R-SEND-3)
 

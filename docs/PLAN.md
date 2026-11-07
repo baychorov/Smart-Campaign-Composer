@@ -17,7 +17,7 @@ Bir adım bitince durumu güncellenir ve kısa bir not düşülür.
 | 4 | `segment` paketi | Kural tipleri, doğrulama, kanonik biçim, SQL derleyici. Birim testleri ve Postgres üzerinde sayı testleri; parantez, izin koşulu ve SQL injection property testleri | R-AUD-1, R-AUD-2 | ✅ |
 | 5 | `llm` paketi | `Client` interface'i, fake, Anthropic adaptörü, segment çıkarımı ve onarım döngüsü, kontrat testleri (katman 3: sahte SSE sunucusu, bölünmüş `\uXXXX` kaçışı dahil) | R-AI-1, R-AI-2 | ✅ |
 | 5b | `make test-live` | Adım 1 doğrulamasının kalıcı hâli: Anthropic adaptörü üzerinden en fazla 2 gerçek çağrı (`end_turn` + sıkı doğrulama, `max_tokens` dalı), `//go:build live`. Çalıştırmak için kullanıcı onayı gerekir (D-TEST) | R-AI-1 | ✅ |
-| 6 | `content` paketi ve üretim akışı | Mesaj şeması, rune ile sayım, değişkenler için en kötü durum doğrulaması, artımlı JSON çıkarıcı, SSE ile üretim endpoint'i | R-CNT-1..3 | ⏳ |
+| 6 | `content` paketi ve üretim akışı | Mesaj şeması, rune ile sayım, değişkenler için en kötü durum doğrulaması, artımlı JSON çıkarıcı, SSE ile üretim endpoint'i | R-CNT-1..3 | ✅ |
 | 7 | `campaign` paketi | Durum makinesi, `partial` onayı, kanal seçimi, onay anında snapshot (`deliveries`), HTTP API | R-AUD-2, R-SEND-3 | ⏳ |
 | 8 | Mock provider | Hata, gecikme ve 429 enjeksiyonu; kayan pencere limiti; idempotency anahtarları; istatistik endpoint'i | R-MOCK-1, R-MOCK-2 | ⏳ |
 | 9 | `delivery` worker | Claim ve lease, retry/backoff, kanal başına limiter, izin tekrar kontrolü. Worker'ı öldürüp yeniden başlatan test | R-SEND-1..4 | ⏳ |
@@ -109,3 +109,16 @@ Puanlama, kuralın seed'de döndürdüğü kullanıcı kümesiyle yapılır (bkz
   - Çağrı 1: `end_turn` geldi, sıkı decode ve `Validate` geçti, kitle D-CART ile aynı. Ton ve indirim `notes`'a yazıldı. 2742 input / 201 output token, ilk delta 2,9 sn, toplam 4,2 sn.
   - Çağrı 2: `max_tokens=40` ile `max_tokens` döndü, yarım metin geçersiz JSON.
   - Üç varyantlı koşul şeması API tarafından kabul edildi. Bulgular: DECISIONS D-LLM-OUT.
+- **Adım 6 (2026-11-07):** İçerik üretim akışı eklendi. Gerçek API çağrısı yapılmadı.
+  - `internal/content`: mesaj tipi, `{{first_name}}` / `{{city}}` beyaz listesi, boş isim için "Değerli Müşterimiz" yedeği, rune ile ve en kötü durumda doğrulama, artımlı JSON çıkarıcı.
+  - `internal/llm`: içerik şeması ve prompt'u, `GenerateContent` (olaylar: `started` → `delta` → `validated` / `invalid`, gerektiğinde `reset`; en fazla 2 onarım) ve `LLM_PROVIDER=mock` için `Demo` istemcisi.
+  - `internal/httpapi`: `POST /api/content/generations`, `GET /api/content/generations/{id}/events` (SSE, `Last-Event-ID` ile kaldığı yerden devam), `POST /api/content/validate`, `GET /api/info`.
+  - `internal/campaign`: en uzun isim ve şehir sorgusu (şimdilik tüm kullanıcılar üzerinden).
+  - Testler:
+    - Çıkarıcı, test dokümanları her byte noktasından ikiye ve üçe bölünerek test edildi; ayrıca 2000 rastgele mesajla. Sonuç her durumda `json.Unmarshal` ile aynı ve her delta geçerli UTF-8.
+    - 160/161 Türkçe karakter sınırı, şablon olarak sığıp en uzun isimle taşan SMS.
+    - Akan metnin doğrulanan metinle aynı olması, onarım ve stream kopmasında `reset`.
+    - SSE uçtan uca: canlı akış, sonradan bağlanma ve devam, hatalı istekler. En uzun değer sorgusu seed üzerinde entegrasyon testiyle doğrulandı.
+  - Bilerek bozma kontrolleri: yarım UTF-8'i bekletme kapatılınca, surrogate eşleştirme kapatılınca ve SSE flush'ı kapatılınca ilgili testler kırıldı.
+  - Mock modda API başlatılıp `curl` ile duman testi yapıldı. En kötü durum, veritabanındaki 31 karakterlik isimle hesaplandı.
+  - DECISIONS D-CONTENT ve D-STREAM'e güncelleme eklendi.

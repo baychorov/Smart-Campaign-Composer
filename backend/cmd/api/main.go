@@ -8,7 +8,12 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/campaign"
+	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/content"
+	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/httpapi"
+	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/llm"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/platform"
 )
 
@@ -29,9 +34,41 @@ func run(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	db, err := platform.OpenDB(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	var client llm.Client
+	if cfg.LLMProvider == platform.LLMProviderAnthropic {
+		client = llm.NewAnthropic(llm.AnthropicConfig{
+			APIKey:  cfg.AnthropicAPIKey,
+			Model:   cfg.LLMModel,
+			BaseURL: cfg.AnthropicBaseURL,
+		})
+	} else {
+		client = llm.NewDemo()
+	}
+
+	api := httpapi.New(httpapi.Config{
+		LLM:         client,
+		LLMProvider: cfg.LLMProvider,
+		Longest: func(ctx context.Context) (content.Values, error) {
+			return campaign.LongestValues(ctx, db)
+		},
+		Log: log,
+	})
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", platform.Healthz)
+	api.Register(mux)
 
 	log.Info("starting api", "config", cfg)
-	return platform.ServeHTTP(ctx, &http.Server{Addr: cfg.APIAddr, Handler: mux})
+	// No WriteTimeout: SSE responses are long-lived (D-STREAM).
+	return platform.ServeHTTP(ctx, &http.Server{
+		Addr:              cfg.APIAddr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	})
 }
