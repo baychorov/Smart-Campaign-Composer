@@ -178,6 +178,7 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - **Yeniden bağlanma:** Her olay tam durumu taşır; yeniden bağlanan istemci bir sonraki olayla doğru duruma gelir, replay gerekmez.
   - **Kapanış:** Kampanya `completed` olduğunda son olay `done: true` ile gönderilir ve akış kapanır.
   - **Hata durumları:** Bilinmeyen id için akış başlamadan JSON `404` döner. DB okuması başarısız olursa son durum korunur ve akış devam eder.
+- **Güncelleme (2026-11-07, PLAN adım 11):** Kampanya yanıtına (`GET`, `PUT /rule`, `PUT /content`, onay) `content_validation` alanı eklendi: kayıtlı mesajın, kuralın güncel kitlesine göre doğrulaması (`valid`, `errors`, `stats`). Onaylanmış veya mesajı olmayan taslakta `null`. Böylece sayfa yenilenince ya da kural değişince arayüz eski bir doğrulama sonucunu göstermez. Hesap `PUT /content` ile aynıdır (`campaign.Service.ContentValidation`).
 
 ## D-CONTENT: İçerik kuralları
 
@@ -326,6 +327,16 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Gerekçe:** TypeScript, SSE olaylarının ve kural şemasının tiplerini korur.
 - **Sınırlar:** Kimlik doğrulama yok; tek kullanıcı varsayılır ve README'de belirtilir.
 - **Güncelleme (2026-11-06):** Frontend testleri Vitest ile yazılır (Vite ile aynı yapılandırmayı kullanır) ve `make test`'e dahildir (bkz. D-TEST).
+- **Güncelleme (2026-11-07, PLAN adım 11, kullanıcı kararları):**
+  - **Yerleşim:** İki sütunlu çalışma alanı: solda kitle, sağda mesajlar; altta sabit bir onay çubuğu. Pazarlamacı onaylarken kitleyi, içeriği ve kanal seçimini aynı anda görür. Dar ekranda tek sütuna düşer. Onaydan sonra aynı URL dashboard'u gösterir.
+    - Alternatifler: Adım adım sihirbaz (onay anında kitle görünmez), tek sütunlu uzun akış (onay düğmesinde kitle ekran dışında kalır). Bir HTML maketiyle karşılaştırıldı.
+  - **Tema:** Yalnızca soft açık tema; koyu tema ve neon renkler yok. Renkler `src/styles/tokens.css`'te CSS değişkenleri olarak durur; bileşenler sabit renk kullanmaz, tema tek dosyadan değiştirilebilir. Stil kütüphanesi yok, bileşen içi scoped CSS. Font (IBM Plex Sans/Mono) pakete gömülüdür, dış istek yapılmaz; yalnızca Türkçe için gereken Latin alt kümeleri yüklenir.
+  - **Kural düzenleme kapsamı:** Koşul silme, şehir silme, yaş ve gün sayısını değiştirme. Koşul veya grup ekleme yok. Düzenlenen kural `PUT /rule` ile gider; gösterilen kural her zaman backend'in normalize ettiği kuraldır. Son koşulun silme düğmesi gösterilmez. Mesaj üretilirken kural düzenlenemez.
+  - **Üretimin başlaması:** Kural `ok` ve mesaj yoksa sayfa açılınca otomatik başlar. `partial` kuralda pazarlamacı uygulanmayan kriterleri gördükten sonra düğmeyle başlatır.
+  - **Kampanya listesi yok:** Kampanya id'si URL'de durur, sayfa yenilenince aynı kampanya açılır.
+  - **Onay kilidi:** Onay düğmesinin neden kapalı olduğu çubukta yazar. Kurallar backend'in kontrolleriyle aynıdır (`lib/approval.ts`); backend onayda hepsini yeniden kontrol eder.
+  - **Yeniden yükleme:** Üretim id'si `sessionStorage`'da tutulur; sayfa yenilenirse yeni bir üretim başlatılmaz, sürmekte olanın olayları baştan dinlenir. Üretim kaydedilmeden biterse (`validated`), frontend mesajı `PUT /content` ile kaydeder.
+  - **Sınırlar:** Önizlemede "en uzun isim" örneği yok, çünkü API kişisel veri olan bu değeri göndermez; en kötü durum yalnızca karakter sayısı olarak görünür. Kaydedilmemiş düzenlemede en kötü durum gösterilmez, kaydedince hesaplanır.
 
 ## D-TEST: Test yaklaşımı (D-3)
 

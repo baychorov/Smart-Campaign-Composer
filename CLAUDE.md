@@ -17,7 +17,7 @@ Teknoloji: Go (backend), Vue 3 + TypeScript + Vite (frontend), PostgreSQL
 ```
 backend/       Go modülü: cmd/{api,worker,mockprovider,seed}, internal/, migrations/
                Go kuralları: backend/CLAUDE.md
-frontend/      Vue 3 uygulaması (eklenecek)
+frontend/      Vue 3 + TypeScript uygulaması (Vite, Vitest)
 docs/          CASE.md, PLAN.md
 ai-sessions/   Claude session export'ları (D-6)
 DECISIONS.md   Karar kayıtları (D-5)
@@ -44,6 +44,7 @@ Bu kurallar hiçbir değişiklikte gevşetilmez:
 |---|---|---|
 | `docker compose up` | Tüm sistemi seed ve mock provider ile başlatır | eklenecek |
 | `make test` | Test katmanları 1–4 ve frontend testleri (Docker gerekir, API key gerekmez) | eklenecek |
+| `make frontend-dev` | Vite dev sunucusu (:5173); `/api` istekleri Go API'ye (:8080) yönlenir | var |
 | `make test-unit` | Katman 1 (birim) ve 3 (LLM, fake ve sahte SSE ile). Docker ve key gerekmez | eklenecek |
 | `make test-live` | Gerçek API ile adaptör kontrat kontrolü, en fazla 2 çağrı (key gerekir, ücretli) | eklenecek |
 | `make eval` | Gerçek API ile 20 brief eval'i (key gerekir, ücretli) | eklenecek |

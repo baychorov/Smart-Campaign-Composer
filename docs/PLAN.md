@@ -22,7 +22,7 @@ Bir adım bitince durumu güncellenir ve kısa bir not düşülür.
 | 8 | Mock provider | Hata, gecikme ve 429 enjeksiyonu; kayan pencere limiti; idempotency anahtarları; istatistik endpoint'i | R-MOCK-1, R-MOCK-2 | ✅ |
 | 9 | `delivery` worker | Claim ve lease, retry/backoff, kanal başına limiter, izin tekrar kontrolü. Worker'ı öldürüp yeniden başlatan test | R-SEND-1..4 | ✅ |
 | 10 | Gözlemlenebilirlik | `/metrics`, `/healthz`, `/readyz`, dashboard SSE akışı | R-OBS-1..3 | ✅ |
-| 11 | Frontend | Brief formu → kural kartları ve sayılar → içerik akışı ve düzenleme → onay (kanal checkbox'ları, `partial` onayı) → dashboard | Bölüm 3 | ⏳ |
+| 11 | Frontend | Brief formu → kural kartları ve sayılar → içerik akışı ve düzenleme → onay (kanal checkbox'ları, `partial` onayı) → dashboard | Bölüm 3 | ✅ |
 | 12 | Uçtan uca | `docker compose up` ile tek komutta kurulum; `make test` (katman 1–4 + frontend) ve `make test-unit` hedefleri | D-2, D-3 | ⏳ |
 | 13 | Eval | `make eval`: 20 brief × 3 çalıştırma, doğruluk ve tutarlılık raporu | R-AI-1 | ⏳ |
 | 14 | Teslim | README (kurulum ve mimari özeti), DECISIONS son hali, yetişmeyenlerin listesi, `ai-sessions/` export'ları (API key ve kişisel bilgiler temizlenmiş) | D-1, D-4..6 | ⏳ |
@@ -233,3 +233,15 @@ Puanlama, kuralın seed'de döndürdüğü kullanıcı kümesiyle yapılır (bkz
     - Gönderim ortasında Postgres durduruldu: `/readyz` `503`, `/healthz` `200` döndü. DB geri gelince gönderim tamamlandı.
     - 53 kaydedilemeyen sonuç tekrar gönderildi; çift teslim olmadı.
     - Test kampanyası sonra silindi.
+- **Adım 11 (2026-11-07):** Frontend eklendi (`frontend/`: Vue 3, Vite, TypeScript). Gerçek API çağrısı yapılmadı.
+  - **Yerleşim (kullanıcı kararı):** İki sütunlu çalışma alanı (kitle | mesajlar) ve altta sabit onay çubuğu; onaydan sonra aynı URL dashboard'u gösterir. Yalnızca soft açık tema. Ayrıntılar: DECISIONS D-FE.
+  - **Sayfalar:** `/` brief formu, `/campaigns/:id` kampanya. Kampanya listesi yok.
+  - **Bileşenler:** kural kartları (ortak koşullar, VEYA ile ayrılmış gruplar, grup başına sayı, kilitli izin satırı), koşul düzenleme (şehir silme, yaş ve gün değiştirme, koşul silme), içerik akışı ve düzenleme, SMS ve email önizlemesi, onay çubuğu (kanal checkbox'ları, `partial` onayı, kilit sebepleri), dashboard (kanal başına ilerleme, hız grafiği, en sık hatalar).
+  - **Akış mantığı:** `useEventStream` (terminal olayda bağlantıyı kapatır, reddedilen bağlantıyı hata sayar), olay reducer'ı (`lib/generation.ts`), `validated` sonrası `PUT /content` ile kayıt, üretim id'si `sessionStorage`'da (sayfa yenilenince yeni ve ücretli bir üretim başlamaz).
+  - **Backend:** Kampanya yanıtına `content_validation` eklendi (kayıtlı mesajın güncel kitleye göre doğrulaması). Kural düzenlenince en kötü durum yeniden hesaplanır. Entegrasyon testi eklendi; doğrulama kitle yerine tüm kullanıcılarla yapılınca test kırıldı.
+  - **Testler (Vitest, 53 test):** saf mantık (rune sayımı, kural düzenleme, olay reducer'ı, onay kilidi), sahte `EventSource` ile `useEventStream` ve içerik editörü, bileşen testleri, sahte `fetch` ile kampanya sayfası (partial onayı → onay isteği gövdesi → dashboard → `done` ile kapanış).
+  - **Testin yakaladığı hata:** Kural düzenleme `structuredClone` kullanıyordu; Vue'nun reaktif Proxy'sini kopyalayamadığı için uygulamada da çalışmayacaktı. JSON kopyasına geçildi, regresyon testi eklendi.
+  - **Bilerek bozma:** `partial` kilidi kaldırılınca 2, terminal olayda kapatma kaldırılınca 2, `validated` sonrası kayıt kaldırılınca 1 test kırıldı.
+  - **Elle duman testi:** Mock LLM (`LLM_PROVIDER=mock` açıkça verildi), worker ve mock provider ile Vite proxy'si üzerinden. SSE proxy'de tamponlanmadan aktı; kural düzenleme sayıları güncelledi (146 → 342 → 146); onay sonrası dashboard 231/231 ile tamamlandı. Headless Firefox ile masaüstü ve 420 px genişlikte ekran görüntüsü kontrol edildi. Loglarda kişisel veri yok. Test kampanyası sonra silindi.
+  - **Makefile:** `make test` frontend testlerini, `make lint` ESLint ve `vue-tsc`'yi içerir; `make frontend-dev` Vite'ı başlatır. Docker'da sunulması adım 12'de.
+  - **Not:** `npm audit` 15 orta seviye uyarı veriyor. Hepsi eslint ve editorconfig'in kullandığı `minimatch` sürümünden geliyor ve yalnızca geliştirme araçlarında bulunuyor; tarayıcıya giden pakette yok.
