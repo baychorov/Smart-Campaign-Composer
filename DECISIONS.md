@@ -338,6 +338,36 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - **Yeniden yükleme:** Üretim id'si `sessionStorage`'da tutulur; sayfa yenilenirse yeni bir üretim başlatılmaz, sürmekte olanın olayları baştan dinlenir. Üretim kaydedilmeden biterse (`validated`), frontend mesajı `PUT /content` ile kaydeder.
   - **Sınırlar:** Önizlemede "en uzun isim" örneği yok, çünkü API kişisel veri olan bu değeri göndermez; en kötü durum yalnızca karakter sayısı olarak görünür. Kaydedilmemiş düzenlemede en kötü durum gösterilmez, kaydedince hesaplanır.
 
+## D-COMPOSE: Tek komutla kurulum (D-2)
+
+- **Karar (2026-11-08, PLAN adım 12):** `docker compose up --build` tüm sistemi başlatır. Servisler ve açılış sırası:
+  - `postgres` → `seed` (migration ve örnek veri, sonra kapanır) → `api`, `worker` (ve bağımsız olarak `mockprovider`) → `web`.
+  - Sıra `depends_on` koşullarıyla sağlanır: Postgres healthcheck'i, seed'in başarıyla bitmesi (`service_completed_successfully`), api ve worker için `/readyz`, mock provider için `/healthz`.
+  - **İmajlar:** Backend için tek imaj (`backend/Dockerfile`, çok aşamalı): dört binary aynı imajda durur, her servis `command` ile birini çalıştırır. Çalışma imajı Alpine'dir (healthcheck için `wget` gerekir) ve root olmayan kullanıcıyla çalışır. Frontend imajı (`frontend/Dockerfile`) Vue uygulamasını derler ve nginx ile sunar.
+  - **nginx:** `/api` isteklerini `api:8080`'e iletir; tarayıcı tek bir origin görür, CORS gerekmez. SSE için `proxy_buffering off` ve uzun `proxy_read_timeout`. İstemci tarafı rotalar (`/campaigns/:id`) `index.html`'e düşer. Hash'li dosyalar (`/assets/`) uzun süre önbelleğe alınır.
+  - **Portlar:** arayüz `3000`, API `8080` (`/metrics`), worker `8081`, mock provider `8090` (`/stats`), Postgres `5432`.
+  - **Config:** Container'lar birbirine servis adıyla ulaşır; adresler (`DATABASE_URL`, `PROVIDER_URL`, `*_ADDR`) compose dosyasında sabittir. `.env`'den yalnızca compose'ta `${...}` ile anılan değerler alınır: `LLM_*` ve `ANTHROPIC_*` yalnızca api'ye, `WORKER_*` worker'a, `MOCK_*` mock provider'a. Boş değer Go kodundaki varsayılan demektir. `.env` yoksa LLM mock modda çalışır.
+  - **Seed:** Veri zaten varsa seed hiçbir şey yapmadan çıkar; `docker compose down -v` veriyi silip sıfırdan başlatır.
+  - **`make smoke` (`scripts/smoke.sh`):** Çalışan sisteme nginx üzerinden arayüzün akışını uygular: brief → kural → içerik akışı → kayıt → onay → gönderimin bitmesi. Kontroller:
+    - SSE olaylarının tek tek gelmesi (tarayıcı gibi `Accept-Encoding` ile).
+    - Snapshot sayılarının gönderim sonuçlarıyla aynı olması.
+    - Mock provider'daki teslim sayısının DB'deki `sent` sayısına eşit olması.
+    - Saniyede 100 sınırının aşılmaması.
+    - Loglarda email ve telefon olmaması.
+    
+    API mock LLM kullanmıyorsa script çalışmayı reddeder; gerçek API çağrısı yapmaz. Test kampanyası sonunda silinir.
+- **Gerekçe:** Değerlendiren kişi yalnızca Docker ile sistemi açabilmeli (D-2). Tek backend imajı derleme süresini ve bakım yükünü azaltır. nginx, geliştirmedeki Vite proxy'siyle aynı tek origin düzenini üretimde kurar. Seed'in ayrı ve tek seferlik bir servis olması, api ile worker'ın migration'ları tamamlanmamış bir veritabanına bağlanmasını önler.
+- **Alternatifler:**
+  - Her binary için ayrı imaj: aynı kod dört kez derlenir.
+  - Statik dosyaları Go API'nin sunması: API'ye frontend sorumluluğu ekler; nginx ile ayırmak D-STREAM'de zaten öngörülmüştü.
+  - Migration'ı api'nin başlangıcında çalıştırmak: api ve worker aynı anda başladığında yarış oluşur.
+  - Distroless çalışma imajı: healthcheck için içinde araç yoktur.
+- **Sınırlar:**
+  - Tek api ve tek worker replikası (D-DB, D-STREAM).
+  - `docker compose config` komutu `.env`'deki API key'i açık metin olarak yazdırır; doğrulama için `docker compose config --quiet` kullanılmalı.
+  - Bu nginx sürümünde (1.29) tamponlamayı veya gzip'i bilerek açmak olay akışını bozmadı (nginx her parçada flush ediyor). Bu yüzden smoke testindeki akış kontrolü bilerek bozularak doğrulanamadı; tarayıcı davranışını taklit eden bir güvence olarak duruyor.
+  - "Son N gün" pencereleri seed'in yüklendiği zamana göre kayar; sayılar zamanla değişir (bkz. PLAN adım 7 notu).
+
 ## D-TEST: Test yaklaşımı (D-3)
 
 - **Karar:**

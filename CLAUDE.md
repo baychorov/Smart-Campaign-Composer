@@ -15,10 +15,11 @@ Teknoloji: Go (backend), Vue 3 + TypeScript + Vite (frontend), PostgreSQL
 ## Klasör yapısı
 
 ```
-backend/       Go modülü: cmd/{api,worker,mockprovider,seed}, internal/, migrations/
+backend/       Go modülü: cmd/{api,worker,mockprovider,seed}, internal/, migrations/, Dockerfile
                Go kuralları: backend/CLAUDE.md
-frontend/      Vue 3 + TypeScript uygulaması (Vite, Vitest)
+frontend/      Vue 3 + TypeScript uygulaması (Vite, Vitest); Dockerfile + nginx.conf
 docs/          CASE.md, PLAN.md
+scripts/       smoke.sh (make smoke)
 ai-sessions/   Claude session export'ları (D-6)
 DECISIONS.md   Karar kayıtları (D-5)
 ```
@@ -42,13 +43,15 @@ Bu kurallar hiçbir değişiklikte gevşetilmez:
 
 | Komut | Amaç | Durum |
 |---|---|---|
-| `docker compose up` | Tüm sistemi seed ve mock provider ile başlatır | eklenecek |
-| `make test` | Test katmanları 1–4 ve frontend testleri (Docker gerekir, API key gerekmez) | eklenecek |
+| `docker compose up --build` | Tüm sistemi seed ve mock provider ile başlatır; arayüz http://localhost:3000 | var |
+| `make up` / `make down` | `docker compose up --build` / `docker compose down` kısayolları | var |
+| `make smoke` | Çalışan sisteme uçtan uca duman testi (yalnızca mock LLM ile çalışır, ücretsiz) | var |
+| `make test` | Test katmanları 1–4 ve frontend testleri (Docker gerekir, API key gerekmez) | var |
 | `make frontend-dev` | Vite dev sunucusu (:5173); `/api` istekleri Go API'ye (:8080) yönlenir | var |
-| `make test-unit` | Katman 1 (birim) ve 3 (LLM, fake ve sahte SSE ile). Docker ve key gerekmez | eklenecek |
-| `make test-live` | Gerçek API ile adaptör kontrat kontrolü, en fazla 2 çağrı (key gerekir, ücretli) | eklenecek |
+| `make test-unit` | Katman 1 (birim) ve 3 (LLM, fake ve sahte SSE ile). Docker ve key gerekmez | var |
+| `make test-live` | Gerçek API ile adaptör kontrat kontrolü, en fazla 2 çağrı (key gerekir, ücretli) | var |
 | `make eval` | Gerçek API ile 20 brief eval'i (key gerekir, ücretli) | eklenecek |
-| `make lint` | `gofmt`, `go vet`, frontend lint | eklenecek |
+| `make lint` | `gofmt`, `go vet`, frontend lint | var |
 
 Test katmanları, build tag'leri ve test ilkesi: `DECISIONS.md` D-TEST.
 Ücretli komutlar (`test-live`, `eval`) yalnızca kullanıcı onayıyla çalıştırılır.

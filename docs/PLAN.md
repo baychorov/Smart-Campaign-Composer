@@ -23,7 +23,7 @@ Bir adım bitince durumu güncellenir ve kısa bir not düşülür.
 | 9 | `delivery` worker | Claim ve lease, retry/backoff, kanal başına limiter, izin tekrar kontrolü. Worker'ı öldürüp yeniden başlatan test | R-SEND-1..4 | ✅ |
 | 10 | Gözlemlenebilirlik | `/metrics`, `/healthz`, `/readyz`, dashboard SSE akışı | R-OBS-1..3 | ✅ |
 | 11 | Frontend | Brief formu → kural kartları ve sayılar → içerik akışı ve düzenleme → onay (kanal checkbox'ları, `partial` onayı) → dashboard | Bölüm 3 | ✅ |
-| 12 | Uçtan uca | `docker compose up` ile tek komutta kurulum; `make test` (katman 1–4 + frontend) ve `make test-unit` hedefleri | D-2, D-3 | ⏳ |
+| 12 | Uçtan uca | `docker compose up` ile tek komutta kurulum; `make test` (katman 1–4 + frontend) ve `make test-unit` hedefleri | D-2, D-3 | ✅ |
 | 13 | Eval | `make eval`: 20 brief × 3 çalıştırma, doğruluk ve tutarlılık raporu | R-AI-1 | ⏳ |
 | 14 | Teslim | README (kurulum ve mimari özeti), DECISIONS son hali, yetişmeyenlerin listesi, `ai-sessions/` export'ları (API key ve kişisel bilgiler temizlenmiş) | D-1, D-4..6 | ⏳ |
 | 15 | Bonus (opsiyonel) | Zamanlanmış gönderim, A/B, dile göre içerik, CI | Bölüm 9 | ⏳ |
@@ -246,3 +246,18 @@ Puanlama, kuralın seed'de döndürdüğü kullanıcı kümesiyle yapılır (bkz
   - **Makefile:** `make test` frontend testlerini, `make lint` ESLint ve `vue-tsc`'yi içerir; `make frontend-dev` Vite'ı başlatır. Docker'da sunulması adım 12'de.
   - **Not:** `npm audit` 15 orta seviye uyarı veriyor. Hepsi eslint ve editorconfig'in kullandığı `minimatch` sürümünden geliyor ve yalnızca geliştirme araçlarında bulunuyor; tarayıcıya giden pakette yok.
   - **Tasarım (2026-11-08, kullanıcı kararı):** Arayüz tasarımında ve öge yerleşiminde değişiklikler yapılacak. Bunlar sistem uçtan uca çalışır hâle geldikten sonra (adım 12 sonrası) ele alınacak.
+- **Adım 12 (2026-11-08):** `docker compose up --build` ile tek komutta kurulum eklendi. Gerçek API çağrısı yapılmadı.
+  - **Dosyalar:**
+    - `backend/Dockerfile`: dört binary tek imajda (Alpine, root olmayan kullanıcı).
+    - `frontend/Dockerfile` ve `frontend/nginx.conf`: derlenmiş Vue uygulaması nginx ile sunulur, `/api` API'ye iletilir (SSE tamponsuz).
+    - İki `.dockerignore`: `.env` ve `node_modules` imaja girmez.
+    - `docker-compose.yml`: `postgres → seed → api, worker, mockprovider → web`. Arayüz http://localhost:3000.
+    - `scripts/smoke.sh` ve `make smoke`; ayrıca `make up` / `make down` (`db-down` artık `down`'un takma adı).
+  - **Config:** Adresler compose'ta sabit; `.env`'den yalnızca `LLM_*`, `ANTHROPIC_*`, `WORKER_*` ve `MOCK_*` alınır. `.env` yoksa mock modda çalışır. Ayrıntılar: DECISIONS D-COMPOSE.
+  - **Doğrulama:**
+    - Ayrı bir compose projesiyle (ayrı volume) sıfırdan kurulum: seed 5017 kullanıcı yükledi ve kapandı, tüm servisler healthy oldu. İkinci `up`'ta seed veriyi tekrar yüklemedi.
+    - `make smoke`: case brief'i 146 kişi; 60 delta olayı 1,6 sn'ye yayılarak geldi; onay sonrası SMS 112/112 ve email 119/119 gönderildi, mock teslim sayıları DB ile aynı, en yüksek hız 96/sn; loglarda kişisel veri yok. Hem temiz projede hem varsayılan projede geçti.
+    - İmajlarda `.env` dosyası yok. Headless Firefox ile arayüzün nginx'ten açıldığı ve mock rozetinin göründüğü kontrol edildi.
+    - `make test-unit`, `make test` (frontend 53 test dahil) ve `make lint` geçti.
+  - **Bilerek bozma:** nginx'te tamponlama (`proxy_buffering on` + `X-Accel-Buffering` yok sayıldı) ve ayrıca gzip açıldı; ikisinde de olaylar yine tek tek geldi ve smoke testi geçti. Yani bu nginx sürümü akışı kendiliğinden flush ediyor; akış kontrolü bilerek bozularak doğrulanamadı. Bu deneme sonrası smoke testi tarayıcı gibi `Accept-Encoding` gönderecek şekilde (`curl --compressed`) güncellendi. Kişisel veri regex'inin seed'deki email ve telefon formatlarını yakaladığı ayrıca denendi.
+  - **Not:** `docker compose config` `.env`'deki key'i açık metin yazdırır; doğrulama için `--quiet` kullanılmalı.
