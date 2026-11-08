@@ -1,4 +1,4 @@
-.PHONY: up down smoke test test-unit test-live test-frontend lint db-up db-down seed seed-reset frontend-deps frontend-dev
+.PHONY: up down smoke test test-unit test-live eval eval-dry test-frontend lint db-up db-down seed seed-reset frontend-deps frontend-dev
 
 BACKEND := backend
 FRONTEND := frontend
@@ -36,6 +36,18 @@ test-frontend: frontend-deps
 # ANTHROPIC_API_KEY in the environment or .env. Run only with approval.
 test-live:
 	cd $(BACKEND) && go test -count=1 -v -tags live -run '^TestLive' ./internal/llm/
+
+# Model quality on the 20-brief set (D-TEST). Real API, paid: one call per
+# brief and run, up to 3 with repairs (the -max-calls budget). Run only with
+# approval. Small run: make eval RUNS=1 CASES=1,4,7. Reports: eval/reports/.
+RUNS ?= 3
+CASES ?=
+eval: db-up
+	cd $(BACKEND) && go run ./cmd/eval -runs $(RUNS) -cases "$(CASES)" -out ../eval/reports -commit $$(git rev-parse --short HEAD)
+
+# The same eval with ideal replies instead of the API: free, no report files.
+eval-dry: db-up
+	cd $(BACKEND) && go run ./cmd/eval -dry-run -runs $(RUNS) -cases "$(CASES)"
 
 lint: frontend-deps
 	@unformatted=$$(cd $(BACKEND) && gofmt -l .); \
