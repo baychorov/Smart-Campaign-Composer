@@ -1,3 +1,20 @@
+# `docker compose up --build` starts the whole system (D-2):
+#   postgres → seed (migrations + sample data, then exits)
+#            → api, worker (+ mockprovider) → web (http://localhost:3000)
+#
+# Containers reach each other by service name (postgres, mockprovider, api),
+# so the localhost addresses in .env are not used here. From .env, compose
+# reads only the variables referenced below as ${...}; an empty value means
+# the default in the Go code. Without .env the LLM runs in mock mode.
+# `make test` starts only the postgres service.
+
+x-backend: &backend
+  build: ./backend
+  image: scc-backend:local
+  restart: unless-stopped
+
+x-db-url: &db-url postgres://scc:scc@postgres:5432/scc?sslmode=disable
+
 services:
   postgres:
     image: postgres:18-alpine
@@ -14,6 +31,94 @@ services:
       interval: 2s
       timeout: 3s
       retries: 15
+
+  # Applies migrations and loads the sample data once; does nothing if the
+  # data is already there (`docker compose down -v` starts over).
+  seed:
+    <<: *backend
+    command: ["seed"]
+    restart: "no"
+    environment:
+      DATABASE_URL: *db-url
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  mockprovider:
+    <<: *backend
+    command: ["mockprovider"]
+    environment:
+      MOCK_PROVIDER_ADDR: ":8090"
+      MOCK_ERROR_RATE: ${MOCK_ERROR_RATE:-}
+      MOCK_429_RATE: ${MOCK_429_RATE:-}
+      MOCK_ACCEPT_THEN_FAIL_RATE: ${MOCK_ACCEPT_THEN_FAIL_RATE:-}
+      MOCK_DELAY_MAX: ${MOCK_DELAY_MAX:-}
+      MOCK_RATE_LIMIT: ${MOCK_RATE_LIMIT:-}
+      MOCK_RETRY_AFTER: ${MOCK_RETRY_AFTER:-}
+      MOCK_SEED: ${MOCK_SEED:-}
+    ports:
+      - "8090:8090" # /stats
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8090/healthz"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  api:
+    <<: *backend
+    command: ["api"]
+    environment:
+      DATABASE_URL: *db-url
+      API_ADDR: ":8080"
+      # "mock" unless .env or the shell says otherwise. The key is passed
+      # only to this service and never logged.
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      LLM_MODEL: ${LLM_MODEL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
+    ports:
+      - "8080:8080" # /metrics; the UI reaches the API through web
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  worker:
+    <<: *backend
+    command: ["worker"]
+    environment:
+      DATABASE_URL: *db-url
+      PROVIDER_URL: http://mockprovider:8090
+      WORKER_ADDR: ":8081"
+      WORKER_SEND_RATE: ${WORKER_SEND_RATE:-}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-}
+      WORKER_LEASE: ${WORKER_LEASE:-}
+    ports:
+      - "8081:8081" # /healthz, /readyz, /metrics
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      mockprovider:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8081/readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  web:
+    build: ./frontend
+    image: scc-web:local
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   pgdata:

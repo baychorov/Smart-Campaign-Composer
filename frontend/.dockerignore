@@ -1,0 +1,8 @@
+# Dependencies are installed inside the image with npm ci.
+node_modules
+dist
+*.tsbuildinfo
+.env
+.env.*
+Dockerfile
+.dockerignore
