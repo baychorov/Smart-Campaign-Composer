@@ -20,6 +20,7 @@ backend/       Go modülü: cmd/{api,worker,mockprovider,seed}, internal/, migra
 frontend/      Vue 3 + TypeScript uygulaması (Vite, Vitest); Dockerfile + nginx.conf
 docs/          CASE.md, PLAN.md
 scripts/       smoke.sh (make smoke)
+eval/reports/  make eval raporları (Markdown + JSON, repoda tutulur)
 ai-sessions/   Claude session export'ları (D-6)
 DECISIONS.md   Karar kayıtları (D-5)
 ```
@@ -50,7 +51,8 @@ Bu kurallar hiçbir değişiklikte gevşetilmez:
 | `make frontend-dev` | Vite dev sunucusu (:5173); `/api` istekleri Go API'ye (:8080) yönlenir | var |
 | `make test-unit` | Katman 1 (birim) ve 3 (LLM, fake ve sahte SSE ile). Docker ve key gerekmez | var |
 | `make test-live` | Gerçek API ile adaptör kontrat kontrolü, en fazla 2 çağrı (key gerekir, ücretli) | var |
-| `make eval` | Gerçek API ile 20 brief eval'i (key gerekir, ücretli) | eklenecek |
+| `make eval` | Gerçek API ile 20 brief × 3 eval'i; rapor `eval/reports/`'a yazılır (key gerekir, ücretli). Küçük deneme: `make eval RUNS=1 CASES=1,4,7` | var |
+| `make eval-dry` | Aynı eval, API yerine ideal yanıtlarla (ücretsiz, rapor dosyası yazmaz) | var |
 | `make lint` | `gofmt`, `go vet`, frontend lint | var |
 
 Test katmanları, build tag'leri ve test ilkesi: `DECISIONS.md` D-TEST.

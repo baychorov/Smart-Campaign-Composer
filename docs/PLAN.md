@@ -24,7 +24,7 @@ Bir adım bitince durumu güncellenir ve kısa bir not düşülür.
 | 10 | Gözlemlenebilirlik | `/metrics`, `/healthz`, `/readyz`, dashboard SSE akışı | R-OBS-1..3 | ✅ |
 | 11 | Frontend | Brief formu → kural kartları ve sayılar → içerik akışı ve düzenleme → onay (kanal checkbox'ları, `partial` onayı) → dashboard | Bölüm 3 | ✅ |
 | 12 | Uçtan uca | `docker compose up` ile tek komutta kurulum; `make test` (katman 1–4 + frontend) ve `make test-unit` hedefleri | D-2, D-3 | ✅ |
-| 13 | Eval | `make eval`: 20 brief × 3 çalıştırma, doğruluk ve tutarlılık raporu | R-AI-1 | ⏳ |
+| 13 | Eval | `make eval`: 20 brief × 3 çalıştırma, doğruluk ve tutarlılık raporu | R-AI-1 | ✅ |
 | 14 | Teslim | README (kurulum ve mimari özeti), DECISIONS son hali, yetişmeyenlerin listesi, `ai-sessions/` export'ları (API key ve kişisel bilgiler temizlenmiş) | D-1, D-4..6 | ⏳ |
 | 15 | Bonus (opsiyonel) | Zamanlanmış gönderim, A/B, dile göre içerik, CI | Bölüm 9 | ⏳ |
 
@@ -261,3 +261,19 @@ Puanlama, kuralın seed'de döndürdüğü kullanıcı kümesiyle yapılır (bkz
     - `make test-unit`, `make test` (frontend 53 test dahil) ve `make lint` geçti.
   - **Bilerek bozma:** nginx'te tamponlama (`proxy_buffering on` + `X-Accel-Buffering` yok sayıldı) ve ayrıca gzip açıldı; ikisinde de olaylar yine tek tek geldi ve smoke testi geçti. Yani bu nginx sürümü akışı kendiliğinden flush ediyor; akış kontrolü bilerek bozularak doğrulanamadı. Bu deneme sonrası smoke testi tarayıcı gibi `Accept-Encoding` gönderecek şekilde (`curl --compressed`) güncellendi. Kişisel veri regex'inin seed'deki email ve telefon formatlarını yakaladığı ayrıca denendi.
   - **Not:** `docker compose config` `.env`'deki key'i açık metin yazdırır; doğrulama için `--quiet` kullanılmalı.
+- **Adım 13 (2026-11-08):** `make eval` ve `make eval-dry` eklendi (`internal/eval`, `cmd/eval`). Ayrıntılar: DECISIONS D-TEST güncellemesi.
+  - **Ücretsiz doğrulama:**
+    - `make eval-dry`: ideal yanıtlarla 40/40 doğru.
+    - Gerçek adaptör, sahte key ve ulaşılamayan bir adresle denendi: her çalıştırma tek istek denedi, retry olmadı, hata mesajında key yok.
+  - **Bilerek bozma:** Sebep kontrolü atlandığında, tutarlılık yalnızca status'e bakınca, JSON rapora kullanıcı id'leri eklenince, izin koşulu kontrolü kapatılınca ve bütçe kaldırılınca ilgili testler kırıldı (5/5).
+  - **Gerçek çalıştırmalar (kullanıcı onayıyla, `claude-sonnet-5-5`, effort `low`):**
+    - Küçük deneme: #1, #4, #7 birer kez, 3 çağrı, 3/3 doğru. Rapor repoya alınmadı.
+    - Tam eval: 60 çağrı, 162.882 input / 11.727 output token (yaklaşık 0,44 $), çalıştırma başına ortalama 2,5 sn, onarım ve API hatası yok. Rapor: `eval/reports/2026-11-08T1443-claude-sonnet-5-5.md`.
+  - **Sonuç:** Doğruluk 56/60 (%93,3), tutarlılık 19/20 (%95).
+    - **Kitle:** Kitle bekleyen bütün çalıştırmalarda seçilen kişiler beklenenle birebir aynıydı. Güvenlik kontrolü bütün sorgularda geçti; injection brief'i (#15) üç kez de `rejected` oldu.
+    - **Hatalar:** Dört hatanın dördü de zamanlama ifadesinin sınıflandırmasıyla ilgili:
+      - #2 (3/3 yanlış): "hafta sonu kargo bedava" bir teklifin parçası, ama model bunu gönderim zamanı sanıp `scheduling` ile `partial` yaptı. Kitle doğru; zararı, pazarlamacının gereksiz yere `partial` onayı vermesi.
+      - #13 (1/3 yanlış, tutarsız): Bir çalıştırmada "yarın sabah 10'da" `unsupported` yerine `notes`'a yazıldı ve status `ok` oldu. Kitle doğru.
+  - **Düzeltme (kullanıcı kararı):** Teklifi anlatan zaman ifadeleri mesaj içeriğidir ve kuralı `ok` bırakmalıdır. Gönderim zamanı her zaman `unsupported/scheduling` olur; kural `partial` olur ve pazarlamacı zamanlamanın desteklenmediğini görüp onaylayarak gönderebilir. Segment prompt'una bu iki kural ve `ok` tanımına "gönderim zamanı istenmemiş" şartı eklendi.
+    - Yeniden çalıştırma: #2 ve #13 üçer kez, 6 çağrı (yaklaşık 0,05 $), 6/6 doğru ve ikisi de tutarlı. #2'de teklif `notes`'a yazıldı; #13'te üç seferde de `scheduling`. Rapor: `eval/reports/2026-11-08T1522-cases-2-13-claude-sonnet-5-5.md`.
+    - Tam eval prompt değişikliğinden sonra tekrarlanmadı; diğer 18 brief'in sonucu ilk rapordaki gibidir.

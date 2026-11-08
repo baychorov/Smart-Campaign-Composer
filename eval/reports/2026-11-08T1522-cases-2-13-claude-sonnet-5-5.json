@@ -1,0 +1,365 @@
+{
+  "meta": {
+    "model": "claude-sonnet-5-5",
+    "provider": "anthropic",
+    "effort": "low",
+    "started_at": "2026-11-08T15:22:53.656524159+03:00",
+    "duration": "5.361s",
+    "commit": "d8c193b+prompt",
+    "runs_per_brief": 3,
+    "calls": 6,
+    "seed_now": "2026-11-01T12:00:00Z",
+    "seed_users": 5000,
+    "rng_seed": 42
+  },
+  "totals": {
+    "briefs": 2,
+    "runs": 6,
+    "correct_runs": 6,
+    "consistent_briefs": 2,
+    "runs_with_repairs": 0,
+    "repairs": 0,
+    "errors": 0,
+    "unsafe": 0,
+    "input_tokens": 17433,
+    "output_tokens": 975
+  },
+  "cases": [
+    {
+      "id": 2,
+      "category": "Basit",
+      "brief": "Ankara ve İzmir'deki kullanıcılara hafta sonu kargo bedava mesajı at.",
+      "status": [
+        "ok"
+      ],
+      "audience": "exact",
+      "rules": [
+        {
+          "status": "ok",
+          "audience_scope": "filtered",
+          "common": [
+            {
+              "type": "attribute",
+              "field": "city",
+              "op": "in",
+              "values": [
+                "Ankara",
+                "İzmir"
+              ]
+            }
+          ],
+          "groups": null,
+          "assumptions": null,
+          "unsupported": null,
+          "notes": null
+        }
+      ],
+      "reasons": null,
+      "needs_assumption": false,
+      "expected_sizes": [
+        1201
+      ],
+      "correct_runs": 3,
+      "consistent": true,
+      "runs": [
+        {
+          "run": 1,
+          "status": "ok",
+          "correct": true,
+          "problems": null,
+          "audience_size": 1201,
+          "extra": 0,
+          "missing": 0,
+          "rule": {
+            "status": "ok",
+            "audience_scope": "filtered",
+            "common": [
+              {
+                "type": "attribute",
+                "field": "city",
+                "op": "in",
+                "values": [
+                  "Ankara",
+                  "İzmir"
+                ]
+              }
+            ],
+            "groups": null,
+            "assumptions": [],
+            "unsupported": [],
+            "notes": [
+              "Hafta sonu kargo bedava mesaj içeriğidir, gönderim zamanı değildir."
+            ]
+          },
+          "summary": "şehri Ankara veya İzmir olan",
+          "repairs": 0,
+          "calls": 1,
+          "input_tokens": 2903,
+          "output_tokens": 125,
+          "duration": "2.484s"
+        },
+        {
+          "run": 2,
+          "status": "ok",
+          "correct": true,
+          "problems": null,
+          "audience_size": 1201,
+          "extra": 0,
+          "missing": 0,
+          "rule": {
+            "status": "ok",
+            "audience_scope": "filtered",
+            "common": [
+              {
+                "type": "attribute",
+                "field": "city",
+                "op": "in",
+                "values": [
+                  "Ankara",
+                  "İzmir"
+                ]
+              }
+            ],
+            "groups": null,
+            "assumptions": [],
+            "unsupported": [],
+            "notes": [
+              "Mesaj içeriği: hafta sonu kargo bedava."
+            ]
+          },
+          "summary": "şehri Ankara veya İzmir olan",
+          "repairs": 0,
+          "calls": 1,
+          "input_tokens": 2903,
+          "output_tokens": 111,
+          "duration": "2.483s"
+        },
+        {
+          "run": 3,
+          "status": "ok",
+          "correct": true,
+          "problems": null,
+          "audience_size": 1201,
+          "extra": 0,
+          "missing": 0,
+          "rule": {
+            "status": "ok",
+            "audience_scope": "filtered",
+            "common": [
+              {
+                "type": "attribute",
+                "field": "city",
+                "op": "in",
+                "values": [
+                  "Ankara",
+                  "İzmir"
+                ]
+              }
+            ],
+            "groups": null,
+            "assumptions": [],
+            "unsupported": [],
+            "notes": [
+              "Mesaj içeriği: hafta sonu kargo bedava."
+            ]
+          },
+          "summary": "şehri Ankara veya İzmir olan",
+          "repairs": 0,
+          "calls": 1,
+          "input_tokens": 2903,
+          "output_tokens": 111,
+          "duration": "1.792s"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "category": "Kitle dışı",
+      "brief": "Son 30 günde alışveriş yapan Bursalılara yarın sabah 10'da sadece SMS ile gönder.",
+      "status": [
+        "partial"
+      ],
+      "audience": "exact",
+      "rules": [
+        {
+          "status": "ok",
+          "audience_scope": "filtered",
+          "common": [
+            {
+              "type": "attribute",
+              "field": "city",
+              "op": "in",
+              "values": [
+                "Bursa"
+              ]
+            },
+            {
+              "type": "event",
+              "event": "purchase",
+              "occurred": true,
+              "within_days": 30
+            }
+          ],
+          "groups": null,
+          "assumptions": null,
+          "unsupported": null,
+          "notes": null
+        }
+      ],
+      "reasons": [
+        "scheduling"
+      ],
+      "needs_assumption": false,
+      "expected_sizes": [
+        41
+      ],
+      "correct_runs": 3,
+      "consistent": true,
+      "runs": [
+        {
+          "run": 1,
+          "status": "partial",
+          "correct": true,
+          "problems": null,
+          "audience_size": 41,
+          "extra": 0,
+          "missing": 0,
+          "rule": {
+            "status": "partial",
+            "audience_scope": "filtered",
+            "common": [
+              {
+                "type": "attribute",
+                "field": "city",
+                "op": "in",
+                "values": [
+                  "Bursa"
+                ]
+              },
+              {
+                "type": "event",
+                "event": "purchase",
+                "occurred": true,
+                "within_days": 30
+              }
+            ],
+            "groups": null,
+            "assumptions": [],
+            "unsupported": [
+              {
+                "text": "Yarın sabah 10'da gönderim zamanlaması bu araçta ayarlanamaz.",
+                "reason": "scheduling",
+                "group": null
+              }
+            ],
+            "notes": [
+              "Kanal tercihi: sadece SMS (kitle kriteri değildir)."
+            ]
+          },
+          "summary": "şehri Bursa olan VE son 30 günde alışveriş yapmış",
+          "repairs": 0,
+          "calls": 1,
+          "input_tokens": 2908,
+          "output_tokens": 193,
+          "duration": "2.894s"
+        },
+        {
+          "run": 2,
+          "status": "partial",
+          "correct": true,
+          "problems": null,
+          "audience_size": 41,
+          "extra": 0,
+          "missing": 0,
+          "rule": {
+            "status": "partial",
+            "audience_scope": "filtered",
+            "common": [
+              {
+                "type": "attribute",
+                "field": "city",
+                "op": "in",
+                "values": [
+                  "Bursa"
+                ]
+              },
+              {
+                "type": "event",
+                "event": "purchase",
+                "occurred": true,
+                "within_days": 30
+              }
+            ],
+            "groups": null,
+            "assumptions": [],
+            "unsupported": [
+              {
+                "text": "Yarın sabah 10'da gönderim zamanlaması bu araçta yapılamaz.",
+                "reason": "scheduling",
+                "group": null
+              }
+            ],
+            "notes": [
+              "Kanal tercihi: sadece SMS (kitle kriteri değildir)."
+            ]
+          },
+          "summary": "şehri Bursa olan VE son 30 günde alışveriş yapmış",
+          "repairs": 0,
+          "calls": 1,
+          "input_tokens": 2908,
+          "output_tokens": 191,
+          "duration": "2.25s"
+        },
+        {
+          "run": 3,
+          "status": "partial",
+          "correct": true,
+          "problems": null,
+          "audience_size": 41,
+          "extra": 0,
+          "missing": 0,
+          "rule": {
+            "status": "partial",
+            "audience_scope": "filtered",
+            "common": [
+              {
+                "type": "attribute",
+                "field": "city",
+                "op": "in",
+                "values": [
+                  "Bursa"
+                ]
+              },
+              {
+                "type": "event",
+                "event": "purchase",
+                "occurred": true,
+                "within_days": 30
+              }
+            ],
+            "groups": null,
+            "assumptions": [
+              "Bursalılar: şehir Bursa olarak yorumlandı."
+            ],
+            "unsupported": [
+              {
+                "text": "Yarın sabah 10'da gönderim isteniyor; zamanlama bu araçta yapılamıyor.",
+                "reason": "scheduling",
+                "group": null
+              }
+            ],
+            "notes": [
+              "Kanal tercihi: sadece SMS. Bu bir kitle kriteri değildir; izin kontrolü sistem tarafından yapılır."
+            ]
+          },
+          "summary": "şehri Bursa olan VE son 30 günde alışveriş yapmış",
+          "repairs": 0,
+          "calls": 1,
+          "input_tokens": 2908,
+          "output_tokens": 244,
+          "duration": "2.448s"
+        }
+      ]
+    }
+  ]
+}

@@ -62,6 +62,8 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Güncelleme (2026-11-07, kullanıcı kararı): Yaş ifadelerinin yorumu.** "X yaş üstü", "X yaş üzeri" ve "X yaş ve üstü" hepsi `age gte X` olarak yorumlanır, yani X dahildir. "X yaş altı" `age lte X-1` olarak yorumlanır, yani X hariçtir. Kural prompt'ta yazılıdır. Kural özeti zaten "X yaş ve üzeri" diye gösterdiği için pazarlamacı sınırın dahil olduğunu görür.
   - Gerekçe: Günlük dilde "18 yaş üstü" çoğunlukla "18 ve üstü" anlamında kullanılır. Test setinde #6 ile #16 bu konuda çelişiyordu; #16 `age≥40` olarak düzeltildi.
   - Sınır: "Altı" ile "üstü" simetrik değildir. Belirsiz bir durumda pazarlamacı, onay ekranındaki özetten sınırı görüp düzeltebilir.
+- **Güncelleme (2026-11-08, PLAN adım 13, kullanıcı kararı): Zaman ifadeleri.** Teklifi veya mesajı anlatan zaman ifadeleri ("hafta sonu kargo bedava", "bu hafta sonuna kadar %20 indirim") içeriktir: `notes`'a yazılır, kural `ok` kalır. Kampanyanın gönderim zamanı ("yarın sabah 10'da gönder") her zaman `unsupported`'a `scheduling` sebebiyle yazılır ve kural `partial` olur. Gönderim zamanı kitleyi değiştirmese de pazarlamacının zamanlamanın desteklenmediğini görmesi gerekir; D-PARTIAL onayıyla kampanya yine gönderilebilir.
+  - Gerekçe: İlk eval'de model "hafta sonu kargo bedava"yı üç kez de gönderim zamanı sandı ve kuralı gereksiz yere `partial` yaptı. Gönderim zamanını ise bir kez `notes`'a yazıp kuralı `ok` bıraktı. Prompt'a iki örnekli bir ayrım eklendi; aynı iki brief'in yeniden çalıştırılmasında 6/6 doğru oldu.
 
 ## D-PARTIAL: Kısmi kural onayı kilitler
 
@@ -400,6 +402,20 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - **İlke:** Her metot değil, her paketin dışa açık davranışı test edilir. Öncelik riskli alanlardadır: yanlış kişiye gönderim (izin filtresi, grup parantezleri, kitle snapshot'ı), çift gönderim (D-DEDUP katmanları), SQL güvenliği (LLM'den gelen metnin SQL'e girmemesi) ve karakter limitleri (rune, en kötü durum).
   - **Gerekçe:** Katmanlar ihtiyaç duydukları altyapıya göre ayrılır; en sık çalışan katman en hızlı olanıdır. Canlı test, sahte SSE sunucusunun gerçek API'den uzaklaşıp uzaklaşmadığını kontrol eder; bunu katman 3 tek başına göremez.
   - **Sınırlar:** `refusal` canlı olarak tetiklenmez, yalnızca katman 3'te test edilir. Canlı testler ve eval CI'da çalışmaz.
+- **Güncelleme (2026-11-08, PLAN adım 13, `make eval`):**
+  - **Yapı:** `internal/eval` paketi ve `cmd/eval`. Beklentiler `internal/eval/cases.json` dosyasındadır (go:embed). Her brief için: kabul edilen status'ler (ilki tercih edilen), kitle türü, kabul edilen kurallar, zorunlu `unsupported` sebepleri ve varsayım gerekip gerekmediği. Dosya yüklenirken her beklenen kural `segment.Validate`'ten uyarısız geçmek zorundadır; bozuk bir beklenti eval'i başlatmaz.
+  - **Veri:** Her eval geçici bir veritabanı açar, sabit RNG seed'i (42) ve sabit bir "bugün" (2026-11-01) ile seed'ler, iş bitince siler. Böylece "son N gün" pencereleri kaymaz ve beklenen kitleler her çalıştırmada aynıdır. Geçici veritabanı kodu `platform.CreateTempDB`'ye taşındı; entegrasyon testleri (`pgtest`) de bunu kullanır.
+  - **Akış:** Brief, üretimdeki `llm.ExtractSegment` yolundan geçer (aynı prompt, şema, effort `low` ve onarım döngüsü). Onaylanabilir kural, üretimdeki derleyiciyle (izin koşulu dahil) iki kanal için derlenir ve kişi kümesi SMS ∪ email olarak alınır.
+  - **Puanlama:** Bir çalıştırma şu üç koşulu sağlarsa doğrudur: (1) status kabul edilenlerden biri, (2) kişi kümesi kabul edilen kurallardan birinin kümesiyle birebir aynı, (3) beklenen `unsupported` sebepleri yazılmış. Kitle türleri:
+    - `exact`: küme karşılaştırılır.
+    - `any`: kitle varsayıma bağlıdır (#8 "uzun süredir"); yalnızca onaylanabilir bir kural ve bir varsayım beklenir.
+    - `none`: onaylanabilir kural çıkmamalı.
+    - Ek status'ler: `invalid` (onarımlardan sonra da geçersiz; #9'da kabul edilir, çünkü backend çelişkiyi yakalamıştır), `refusal`, `error` (API hatası).
+  - **Tutarlılık:** Bir brief'in bütün çalıştırmaları aynı status'ü ve aynı kişi kümesini verdiyse brief tutarlıdır. API hatası içeren brief tutarlı sayılmaz.
+  - **Güvenlik:** Her derlenen sorgu ayrıca kontrol edilir: kanalın izin koşuluyla başlamalı, metninde tırnak, `;` veya ASCII dışı karakter olmamalı. Başarısız olursa çalıştırma yanlış sayılır ve komut hata koduyla biter.
+  - **Maliyet kontrolü:** SDK retry'ı kapalıdır; her istek sayılır ve `-max-calls` bütçesini (varsayılan: çalıştırma × brief × 3, yani 2 onarımlı en kötü durum) aşan istek yapılmaz, eval durur. Geçici bir API hatası tekrar denenmez, raporda "API hatası" olarak ayrıca görünür. `make eval-dry` aynı akışı ideal yanıtlarla, API çağrısı yapmadan çalıştırır.
+  - **Raporlar:** `eval/reports/<tarih>-<model>.md` (okunacak rapor) ve `.json` (her çalıştırmanın ham kuralı, token ve süre bilgisi). Kullanıcı id'leri rapora girmez, yalnızca kişi sayıları girer; bunu bir test doğrular. Raporlar repoda tutulur (kullanıcı kararı).
+  - **Testler:** Puanlama, tutarlılık, SQL kontrolü ve rapor birim testleri; seed'li Postgres üzerinde ideal yanıtlarla 40/40, bilerek yanlış ve farklı yazılmış yanıtlarla doğru puanlama (aynı kitlenin iki grup olarak yazılması doğru, `age≤30` ve unutulan koşul yanlış, sebep hatası, çelişkinin onarımdan sonra `invalid` olması), bütçe ve veritabanı hatası testleri.
 
 ## D-LANG: Dil kuralı
 
