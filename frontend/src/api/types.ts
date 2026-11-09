@@ -131,3 +131,22 @@ export interface Progress {
   done: boolean
   at: string
 }
+
+export type ListFilter = 'all' | 'draft' | 'sent'
+
+/** A collapsed row of the campaign list; GET /api/campaigns/{id} has the rest. */
+export interface CampaignListItem {
+  id: number
+  status: CampaignStatus
+  created_at: string
+  approved_at: string | null
+  /** Delivery counts of the channels chosen at approval; empty for a draft. */
+  progress: Partial<Record<'sms' | 'email', ChannelProgress>>
+}
+
+/** Body of GET /api/campaigns. */
+export interface CampaignPage {
+  campaigns: CampaignListItem[]
+  /** Pass as `before` for the next page; null on the last page. */
+  next_before: number | null
+}

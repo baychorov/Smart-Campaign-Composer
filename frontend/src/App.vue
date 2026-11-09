@@ -26,6 +26,7 @@ onMounted(async () => {
       <span v-if="provider === 'mock'" class="mock-badge" title="LLM_PROVIDER=mock: kural ve mesajlar sabit demo yanıtlarıdır">
         Demo modu · mock LLM
       </span>
+      <RouterLink :to="{ name: 'campaigns' }" class="nav-link">Kampanyalar</RouterLink>
       <RouterLink to="/" class="btn">Yeni kampanya</RouterLink>
     </div>
   </header>
@@ -76,6 +77,18 @@ onMounted(async () => {
 }
 a.btn {
   text-decoration: none;
+  white-space: nowrap;
+}
+.nav-link {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--ink-soft);
+  text-decoration: none;
+  padding: 7px 4px;
+}
+.nav-link:hover,
+.nav-link.router-link-exact-active {
+  color: var(--accent);
 }
 @media (max-width: 560px) {
   .brand {

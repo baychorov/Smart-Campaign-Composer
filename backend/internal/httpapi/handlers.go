@@ -65,8 +65,10 @@ func New(cfg Config) *Server {
 // Register adds the API routes to mux.
 func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/info", s.info)
+	mux.HandleFunc("GET /api/campaigns", s.listCampaigns)
 	mux.HandleFunc("POST /api/campaigns", s.createCampaign)
 	mux.HandleFunc("GET /api/campaigns/{id}", s.getCampaign)
+	mux.HandleFunc("DELETE /api/campaigns/{id}", s.deleteCampaign)
 	mux.HandleFunc("PUT /api/campaigns/{id}/rule", s.updateRule)
 	mux.HandleFunc("PUT /api/campaigns/{id}/content", s.saveContent)
 	mux.HandleFunc("POST /api/campaigns/{id}/content/generations", s.startGeneration)

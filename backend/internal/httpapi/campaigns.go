@@ -204,6 +204,58 @@ func (s *Server) getCampaign(w http.ResponseWriter, r *http.Request) {
 	s.writeCampaign(w, r, http.StatusOK, c, nil)
 }
 
+// listCampaigns: GET /api/campaigns?filter=all|draft|sent&before=<id>&limit=<n>.
+// Newest first; next_before is the before value of the next page, or null.
+// Each item is the collapsed row: no brief, rule or message (GET {id} has
+// them).
+func (s *Server) listCampaigns(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	var before int64
+	var limit int
+	var err error
+	if v := q.Get("before"); v != "" {
+		if before, err = strconv.ParseInt(v, 10, 64); err != nil || before <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid_query", "before pozitif bir kampanya id'si olmalı.")
+			return
+		}
+	}
+	if v := q.Get("limit"); v != "" {
+		if limit, err = strconv.Atoi(v); err != nil || limit <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid_query", "limit pozitif bir sayı olmalı.")
+			return
+		}
+	}
+	page, err := s.cfg.Campaigns.List(r.Context(), campaign.ListFilter(q.Get("filter")), before, limit)
+	if errors.Is(err, campaign.ErrBadFilter) {
+		writeError(w, http.StatusBadRequest, "invalid_query", "filter all, draft veya sent olmalı.")
+		return
+	}
+	if err != nil {
+		s.writeCampaignError(w, err)
+		return
+	}
+	var next *int64
+	if page.NextBefore > 0 {
+		next = &page.NextBefore
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"campaigns": nonNil(page.Items), "next_before": next})
+}
+
+// deleteCampaign: DELETE /api/campaigns/{id}. Only a draft can be deleted;
+// an approved campaign answers 409 not_draft.
+func (s *Server) deleteCampaign(w http.ResponseWriter, r *http.Request) {
+	id, ok := campaignID(w, r)
+	if !ok {
+		return
+	}
+	if err := s.cfg.Campaigns.DeleteDraft(r.Context(), id); err != nil {
+		s.writeCampaignError(w, err)
+		return
+	}
+	s.cfg.Log.Info("draft campaign deleted", "campaign_id", id)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // updateRule: PUT /api/campaigns/{id}/rule {rule}.
 func (s *Server) updateRule(w http.ResponseWriter, r *http.Request) {
 	id, ok := campaignID(w, r)

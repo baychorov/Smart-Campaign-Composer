@@ -1,4 +1,4 @@
-import type { Campaign, CampaignWithWarnings, ContentValidation, Issue, Message, Rule } from './types'
+import type { Campaign, CampaignPage, CampaignWithWarnings, ContentValidation, Issue, ListFilter, Message, Rule } from './types'
 
 /** An error response of the API: {error, message, issues?}. */
 export class ApiError extends Error {
@@ -42,6 +42,12 @@ export const api = {
   createCampaign: (brief: string) => request<CampaignWithWarnings>('POST', '/api/campaigns', { brief }),
 
   getCampaign: (id: number) => request<{ campaign: Campaign }>('GET', campaignPath(id)),
+
+  listCampaigns: (filter: ListFilter, before: number | null) =>
+    request<CampaignPage>('GET', `/api/campaigns?filter=${filter}` + (before ? `&before=${before}` : '')),
+
+  /** Drafts only; an approved campaign answers 409 not_draft. */
+  deleteCampaign: (id: number) => request<null>('DELETE', campaignPath(id)),
 
   updateRule: (id: number, rule: Rule) =>
     request<CampaignWithWarnings>('PUT', campaignPath(id) + '/rule', { rule }),

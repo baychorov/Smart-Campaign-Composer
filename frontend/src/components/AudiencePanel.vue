@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import type { ApiError } from '../api/client'
 import type { Campaign, Issue, Rule } from '../api/types'
-import { formatCount, REASON_LABELS } from '../lib/labels'
+import { audienceSentence, formatCount, REASON_LABELS } from '../lib/labels'
 import { isLastCondition, removeCondition, removeValue, setNumber, type CondPath } from '../lib/rule'
 import ConditionRow from './ConditionRow.vue'
 
@@ -25,14 +25,7 @@ const canRemove = computed(() => !isLastCondition(rule.value))
 const audience = computed(() => props.campaign.audience)
 const blocked = computed(() => !props.campaign.approvable)
 
-const summaryText = computed(() => {
-  const s = props.campaign.summary
-  if (s.all) return 'Kanal izni olan tüm kullanıcılar.'
-  const parts: string[] = []
-  if (s.common?.length) parts.push(s.common.join(', '))
-  if (s.groups?.length) parts.push(s.groups.map((g) => `(${g.join(', ')})`).join(' veya '))
-  return `Kanal izni olan, ${parts.join('; ayrıca ')} kullanıcılar.`
-})
+const summaryText = computed(() => audienceSentence(props.campaign.summary))
 
 const onRemove = (p: CondPath) => emit('updateRule', removeCondition(rule.value, p))
 const onRemoveValue = (p: CondPath, i: number) => emit('updateRule', removeValue(rule.value, p, i))

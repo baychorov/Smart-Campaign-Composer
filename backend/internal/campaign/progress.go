@@ -19,6 +19,23 @@ type ChannelProgress struct {
 	Skipped int64 `json:"skipped"`
 }
 
+// add counts n deliveries of a status (one row of a GROUP BY status).
+func (cp *ChannelProgress) add(status string, n int64) {
+	cp.Total += n
+	switch status {
+	case "pending":
+		cp.Pending = n
+	case "sending":
+		cp.Sending = n
+	case "sent":
+		cp.Sent = n
+	case "failed":
+		cp.Failed = n
+	case "skipped":
+		cp.Skipped = n
+	}
+}
+
 // ErrorCount is one error class and how many open or failed rows have it.
 type ErrorCount struct {
 	Error string `json:"error"`
@@ -68,19 +85,7 @@ WHERE campaign_id = $1 GROUP BY channel, status`, id)
 			return Progress{}, fmt.Errorf("scan delivery counts: %w", err)
 		}
 		cp := p.Channels[ch]
-		cp.Total += n
-		switch status {
-		case "pending":
-			cp.Pending = n
-		case "sending":
-			cp.Sending = n
-		case "sent":
-			cp.Sent = n
-		case "failed":
-			cp.Failed = n
-		case "skipped":
-			cp.Skipped = n
-		}
+		cp.add(status, n)
 		p.Channels[ch] = cp
 	}
 	if err := rows.Err(); err != nil {

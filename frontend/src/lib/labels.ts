@@ -1,4 +1,4 @@
-import type { EventType, Reason } from '../api/types'
+import type { EventType, Reason, Summary } from '../api/types'
 
 /** Short labels for event condition chips: [did, did not]. */
 export const EVENT_LABELS: Record<EventType, [string, string]> = {
@@ -36,4 +36,17 @@ export const STATUS_LABELS = {
 
 export function formatCount(n: number): string {
   return n.toLocaleString('tr-TR')
+}
+
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+/** The rule summary as one sentence, e.g. on the audience card. */
+export function audienceSentence(s: Summary): string {
+  if (s.all) return 'Kanal izni olan tüm kullanıcılar.'
+  const parts: string[] = []
+  if (s.common?.length) parts.push(s.common.join(', '))
+  if (s.groups?.length) parts.push(s.groups.map((g) => `(${g.join(', ')})`).join(' veya '))
+  return `Kanal izni olan, ${parts.join('; ayrıca ')} kullanıcılar.`
 }

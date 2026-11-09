@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -443,5 +444,103 @@ func TestCampaignProgressStream(t *testing.T) {
 		if strings.Contains(metrics, leak) {
 			t.Errorf("/metrics contains %q", leak)
 		}
+	}
+}
+
+// deleteCampaign sends DELETE and returns the status; a 204 has no body.
+func (c apiClient) deleteCampaign(path string) int {
+	c.t.Helper()
+	req, _ := http.NewRequestWithContext(c.t.Context(), "DELETE", c.url+path, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	resp.Body.Close()
+	return resp.StatusCode
+}
+
+func TestCampaignListAndDelete(t *testing.T) {
+	fake := llm.NewFake(llm.Text(caseRuleJSON), llm.Text(caseRuleJSON), llm.Text(caseRuleJSON))
+	env := newCampaignEnv(t, fake)
+	api := env.api
+
+	create := func() map[string]any {
+		t.Helper()
+		status, out := api.do("POST", "/api/campaigns", `{"brief":"İstanbul'da sepeti terk edenler"}`)
+		if status != http.StatusCreated {
+			t.Fatalf("create: %d %v", status, out)
+		}
+		return campaignOf(t, out)
+	}
+	draft1, sent, draft2 := create(), create(), create()
+	if status, out := api.do("PUT", idPath(sent)+"/content", messageText(t, goodMessage)); status != http.StatusOK {
+		t.Fatalf("save content: %d %v", status, out)
+	}
+	if status, out := api.do("POST", idPath(sent)+"/approve", `{"channels":{"sms":true,"email":false}}`); status != http.StatusOK {
+		t.Fatalf("approve: %d %v", status, out)
+	}
+
+	listIDs := func(out map[string]any) []any {
+		var got []any
+		for _, it := range out["campaigns"].([]any) {
+			got = append(got, it.(map[string]any)["id"])
+		}
+		return got
+	}
+
+	// Newest first; a row has no brief, rule or message.
+	status, out := api.do("GET", "/api/campaigns", "")
+	if status != http.StatusOK || fmt.Sprint(listIDs(out)) != fmt.Sprint([]any{draft2["id"], sent["id"], draft1["id"]}) || out["next_before"] != nil {
+		t.Fatalf("list: %d %v", status, out)
+	}
+	row := out["campaigns"].([]any)[1].(map[string]any)
+	for _, k := range []string{"brief", "rule", "message"} {
+		if _, ok := row[k]; ok {
+			t.Errorf("list row has %q", k)
+		}
+	}
+	progress := row["progress"].(map[string]any)
+	if _, ok := progress["email"]; ok || progress["sms"].(map[string]any)["total"].(float64) == 0 {
+		t.Fatalf("progress of an SMS-only campaign: %v", progress)
+	}
+
+	// Filter and paging.
+	status, out = api.do("GET", "/api/campaigns?filter=sent", "")
+	if status != http.StatusOK || fmt.Sprint(listIDs(out)) != fmt.Sprint([]any{sent["id"]}) {
+		t.Fatalf("sent filter: %d %v", status, out)
+	}
+	status, out = api.do("GET", "/api/campaigns?limit=2", "")
+	if status != http.StatusOK || out["next_before"] != sent["id"] {
+		t.Fatalf("first page: %d %v", status, out)
+	}
+	status, out = api.do("GET", "/api/campaigns?limit=2&before="+fmtAny(sent["id"]), "")
+	if status != http.StatusOK || fmt.Sprint(listIDs(out)) != fmt.Sprint([]any{draft1["id"]}) {
+		t.Fatalf("second page: %d %v", status, out)
+	}
+	for _, q := range []string{"?filter=archived", "?before=0", "?before=x", "?limit=-1"} {
+		if status, out = api.do("GET", "/api/campaigns"+q, ""); status != http.StatusBadRequest || out["error"] != "invalid_query" {
+			t.Errorf("%s: %d %v", q, status, out)
+		}
+	}
+
+	// Delete: drafts only.
+	if status := api.deleteCampaign(idPath(draft1)); status != http.StatusNoContent {
+		t.Fatalf("delete draft: %d", status)
+	}
+	if status, _ = api.do("GET", idPath(draft1), ""); status != http.StatusNotFound {
+		t.Fatalf("get deleted draft: %d", status)
+	}
+	if status := api.deleteCampaign(idPath(draft1)); status != http.StatusNotFound {
+		t.Fatalf("delete twice: %d", status)
+	}
+	if status := api.deleteCampaign(idPath(sent)); status != http.StatusConflict {
+		t.Fatalf("delete approved: %d", status)
+	}
+	status, out = api.do("GET", "/api/campaigns", "")
+	if fmt.Sprint(listIDs(out)) != fmt.Sprint([]any{draft2["id"], sent["id"]}) {
+		t.Fatalf("list after delete: %d %v", status, out)
+	}
+	if !strings.Contains(env.logs.String(), "draft campaign deleted") {
+		t.Error("deletion is not logged")
 	}
 }
