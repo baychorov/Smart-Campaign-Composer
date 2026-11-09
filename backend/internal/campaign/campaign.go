@@ -21,8 +21,16 @@ type Status string
 const (
 	StatusDraft     Status = "draft"     // editable; no deliveries yet
 	StatusApproved  Status = "approved"  // snapshot written, waiting for the worker
+	StatusScheduled Status = "scheduled" // snapshot written, held until ScheduledAt
 	StatusSending   Status = "sending"   // the worker has started (PLAN step 9)
 	StatusCompleted Status = "completed" // every delivery is final
+	StatusCancelled Status = "cancelled" // a scheduled campaign stopped before sending
+)
+
+// Send time limits for a scheduled campaign (PLAN step 15a).
+const (
+	MinScheduleLead = 5 * time.Minute
+	MaxScheduleLead = 30 * 24 * time.Hour
 )
 
 // transitions is the state machine. Every change of campaigns.status must
@@ -30,9 +38,10 @@ const (
 // UPDATE ... WHERE status = <from>, so of two concurrent requests only one
 // can make the move.
 var transitions = map[Status][]Status{
-	StatusDraft:    {StatusApproved},
-	StatusApproved: {StatusSending},
-	StatusSending:  {StatusCompleted},
+	StatusDraft:     {StatusApproved, StatusScheduled},
+	StatusApproved:  {StatusSending},
+	StatusScheduled: {StatusSending, StatusCancelled},
+	StatusSending:   {StatusCompleted},
 }
 
 // CanTransition reports whether the state machine allows from → to.
@@ -53,8 +62,11 @@ type Campaign struct {
 	// criteria it could not express (D-PARTIAL).
 	PartialAckAt *time.Time
 	ApprovedAt   *time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// ScheduledAt is the send time: for a draft the model's suggestion from
+	// the brief, after approval the time the marketer chose. Nil means now.
+	ScheduledAt *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 var (
@@ -63,6 +75,11 @@ var (
 	// ErrNotDraft: the campaign is no longer a draft, so it cannot be edited
 	// or approved again.
 	ErrNotDraft = errors.New("campaign is not a draft")
+	// ErrNotScheduled: only a scheduled campaign can be cancelled.
+	ErrNotScheduled = errors.New("campaign is not scheduled")
+	// ErrSendingStarted: the worker took the campaign's first messages
+	// while the cancellation was running; sending wins.
+	ErrSendingStarted = errors.New("campaign sending has started")
 )
 
 // Issue is one reason a request was refused. Message is Turkish: it is
@@ -79,6 +96,7 @@ const (
 	CodeRuleNotApproved = "rule_not_approvable"
 	CodePartialNotAcked = "partial_not_acknowledged"
 	CodeEmptyAudience   = "empty_audience"
+	CodeInvalidSendAt   = "invalid_send_at"
 	// Content errors keep the code from package content (too_long, ...).
 )
 

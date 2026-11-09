@@ -94,7 +94,7 @@ export interface Audience {
   groups?: number[]
 }
 
-export type CampaignStatus = 'draft' | 'approved' | 'sending' | 'completed'
+export type CampaignStatus = 'draft' | 'approved' | 'scheduled' | 'sending' | 'completed' | 'cancelled'
 
 export interface Campaign {
   id: number
@@ -107,6 +107,8 @@ export interface Campaign {
   channels: { sms: boolean; email: boolean }
   partial_ack_at: string | null
   approved_at: string | null
+  /** Draft: the send time suggested from the brief. Approved: the scheduled time. Null: now. */
+  send_at: string | null
   created_at: string
   updated_at: string
   audience: Audience | null
@@ -147,6 +149,7 @@ export interface CampaignListItem {
   status: CampaignStatus
   created_at: string
   approved_at: string | null
+  send_at: string | null
   /** Delivery counts of the channels chosen at approval; empty for a draft. */
   progress: Partial<Record<'sms' | 'email', ChannelProgress>>
 }

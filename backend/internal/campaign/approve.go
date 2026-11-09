@@ -21,6 +21,23 @@ type ApproveRequest struct {
 	// PartialAck: "continue without the criteria that could not be
 	// applied". Required when the rule's status is partial (D-PARTIAL).
 	PartialAck bool
+	// SendAt schedules the campaign; nil sends now. The audience is still
+	// computed now, at approval (D-SNAPSHOT); only sending waits.
+	SendAt *time.Time
+}
+
+// checkSendAt returns an issue when t is not a usable send time: it must be
+// at least MinScheduleLead and at most MaxScheduleLead after now.
+func checkSendAt(t, now time.Time) *Issue {
+	switch {
+	case t.Before(now.Add(MinScheduleLead)):
+		return &Issue{Path: "send_at", Code: CodeInvalidSendAt,
+			Message: fmt.Sprintf("Gönderim zamanı en erken %d dakika sonrası olabilir.", int(MinScheduleLead.Minutes()))}
+	case t.After(now.Add(MaxScheduleLead)):
+		return &Issue{Path: "send_at", Code: CodeInvalidSendAt,
+			Message: fmt.Sprintf("Gönderim zamanı en fazla %d gün sonrası olabilir.", int(MaxScheduleLead.Hours()/24))}
+	}
+	return nil
 }
 
 // Snapshot is the number of deliveries written per channel.
@@ -42,6 +59,10 @@ type Snapshot struct {
 //     days" windows are anchored at the approval time.
 //  4. Content check with the longest values of the snapshot itself.
 //
+// With req.SendAt the campaign becomes scheduled instead of approved and
+// its deliveries are due at SendAt (PLAN step 15a); everything else,
+// including the snapshot, happens now.
+//
 // Any failed check rolls everything back and returns *ApprovalError.
 func (s *Service) Approve(ctx context.Context, id int64, req ApproveRequest) (Campaign, Snapshot, error) {
 	ctx, cancel := context.WithTimeout(ctx, approveTimeout)
@@ -56,11 +77,17 @@ func (s *Service) Approve(ctx context.Context, id int64, req ApproveRequest) (Ca
 	// everything on every early return.
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 
+	// A scheduled campaign gets its snapshot now like any other; its
+	// deliveries only become due at SendAt.
+	status, due := StatusApproved, now
+	if req.SendAt != nil {
+		status, due = StatusScheduled, *req.SendAt
+	}
 	c, err := scanCampaign(tx.QueryRow(ctx, `
 UPDATE campaigns
-SET status = $2, approved_at = $3, updated_at = $3, send_sms = $4, send_email = $5
+SET status = $2, approved_at = $3, updated_at = $3, send_sms = $4, send_email = $5, scheduled_at = $7
 WHERE id = $1 AND status = $6
-RETURNING `+columns, id, StatusApproved, now, req.SMS, req.Email, StatusDraft))
+RETURNING `+columns, id, status, now, req.SMS, req.Email, StatusDraft, req.SendAt))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Campaign{}, Snapshot{}, s.notDraftReason(ctx, id)
 	}
@@ -69,7 +96,13 @@ RETURNING `+columns, id, StatusApproved, now, req.SMS, req.Email, StatusDraft))
 	}
 
 	v := segment.Validate(c.Rule)
-	if issues := precheck(v, req); len(issues) > 0 {
+	issues := precheck(v, req)
+	if req.SendAt != nil {
+		if is := checkSendAt(*req.SendAt, now); is != nil {
+			issues = append(issues, *is)
+		}
+	}
+	if len(issues) > 0 {
 		return Campaign{}, Snapshot{}, &ApprovalError{Issues: issues}
 	}
 	if v.Rule.Status == segment.StatusPartial {
@@ -81,17 +114,17 @@ RETURNING `+columns, id, StatusApproved, now, req.SMS, req.Email, StatusDraft))
 
 	var snap Snapshot
 	if req.SMS {
-		if snap.SMS, err = insertDeliveries(ctx, tx, id, v.Rule, segment.ChannelSMS, now); err != nil {
+		if snap.SMS, err = insertDeliveries(ctx, tx, id, v.Rule, segment.ChannelSMS, now, due); err != nil {
 			return Campaign{}, Snapshot{}, err
 		}
 	}
 	if req.Email {
-		if snap.Email, err = insertDeliveries(ctx, tx, id, v.Rule, segment.ChannelEmail, now); err != nil {
+		if snap.Email, err = insertDeliveries(ctx, tx, id, v.Rule, segment.ChannelEmail, now, due); err != nil {
 			return Campaign{}, Snapshot{}, err
 		}
 	}
 
-	var issues []Issue
+	issues = nil
 	if snap.SMS+snap.Email == 0 {
 		issues = append(issues, Issue{Code: CodeEmptyAudience, Message: "Seçilen kanallarda izni olan hiç kullanıcı yok."})
 	}
@@ -111,17 +144,19 @@ RETURNING `+columns, id, StatusApproved, now, req.SMS, req.Email, StatusDraft))
 }
 
 // insertDeliveries writes one pending delivery per audience member of the
-// channel and returns how many were written. A duplicate would violate
-// UNIQUE(campaign_id, user_id, channel) and fail the whole approval.
-func insertDeliveries(ctx context.Context, tx pgx.Tx, campaignID int64, rule segment.Rule, ch segment.Channel, now time.Time) (int64, error) {
+// channel and returns how many were written. The audience is computed at
+// now; the rows become due at due (now, or the scheduled send time). A
+// duplicate would violate UNIQUE(campaign_id, user_id, channel) and fail
+// the whole approval.
+func insertDeliveries(ctx context.Context, tx pgx.Tx, campaignID int64, rule segment.Rule, ch segment.Channel, now, due time.Time) (int64, error) {
 	q, err := segment.CompileAudience(rule, ch, now)
 	if err != nil {
 		return 0, fmt.Errorf("compile %s audience: %w", ch, err)
 	}
 	n := len(q.Args)
-	sql := `INSERT INTO deliveries (campaign_id, user_id, channel)
-SELECT $` + strconv.Itoa(n+1) + `, a.id, $` + strconv.Itoa(n+2) + ` FROM (` + q.SQL + `) a`
-	tag, err := tx.Exec(ctx, sql, append(q.Args, campaignID, string(ch))...)
+	sql := `INSERT INTO deliveries (campaign_id, user_id, channel, next_attempt_at)
+SELECT $` + strconv.Itoa(n+1) + `, a.id, $` + strconv.Itoa(n+2) + `, $` + strconv.Itoa(n+3) + ` FROM (` + q.SQL + `) a`
+	tag, err := tx.Exec(ctx, sql, append(q.Args, campaignID, string(ch), due)...)
 	if err != nil {
 		return 0, fmt.Errorf("insert %s deliveries: %w", ch, err)
 	}

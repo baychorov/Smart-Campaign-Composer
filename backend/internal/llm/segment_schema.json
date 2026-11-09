@@ -1,7 +1,7 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["status", "audience_scope", "common", "groups", "assumptions", "unsupported", "notes"],
+  "required": ["status", "audience_scope", "common", "groups", "assumptions", "unsupported", "notes", "send_at"],
   "properties": {
     "status": {"type": "string", "enum": ["ok", "partial", "unsupported", "rejected"]},
     "audience_scope": {"type": "string", "enum": ["filtered", "all"]},
@@ -34,7 +34,8 @@
         }
       }
     },
-    "notes": {"type": "array", "items": {"type": "string"}}
+    "notes": {"type": "array", "items": {"type": "string"}},
+    "send_at": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}]}
   },
   "$defs": {
     "condition": {

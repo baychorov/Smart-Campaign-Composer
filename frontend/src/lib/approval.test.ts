@@ -9,6 +9,8 @@ const ready = (over: Partial<ApprovalInput> = {}): ApprovalInput => ({
   genPhase: 'validated',
   dirty: false,
   busy: false,
+  sendAt: '',
+  now: new Date('2026-11-01T09:00:00Z'), // 12:00 in Turkey
   ...over,
 })
 
@@ -19,6 +21,11 @@ const smsTooLong = {
 }
 
 describe('blockingReasons', () => {
+  it('blocks a send time outside the limits, allows one inside', () => {
+    expect(blockingReasons(ready({ sendAt: '2026-11-01T12:01' }))).toEqual(['Gönderim zamanı en erken 5 dakika sonrası olabilir'])
+    expect(blockingReasons(ready({ sendAt: '2026-11-02T10:00' }))).toEqual([])
+  })
+
   it('allows a validated ok draft', () => {
     expect(blockingReasons(ready())).toEqual([])
   })

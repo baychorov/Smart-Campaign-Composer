@@ -151,7 +151,7 @@ func runOnce(ctx context.Context, opts Options, c Case) (Run, error) {
 		return r, err
 	case err == nil:
 		rule := res.Validation.Rule
-		r.Rule, r.Status = &rule, string(rule.Status)
+		r.Rule, r.Status, r.SendAt = &rule, string(rule.Status), res.SendAt
 		if !res.Validation.Approvable() {
 			return r, nil
 		}

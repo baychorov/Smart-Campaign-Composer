@@ -44,6 +44,7 @@ export function makeCampaign(over: Partial<Campaign> = {}): Campaign {
     channels: { sms: true, email: true },
     partial_ack_at: null,
     approved_at: null,
+    send_at: null,
     created_at: '2026-11-07T10:00:00Z',
     updated_at: '2026-11-07T10:00:00Z',
     audience: { snapshot: false, reachable: 156, sms: 111, email: 118 },

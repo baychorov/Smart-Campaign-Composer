@@ -53,7 +53,7 @@ type Progress struct {
 	// TopErrors are the most common last_error values of rows that are not
 	// sent: waiting for a retry, or failed for good.
 	TopErrors []ErrorCount `json:"top_errors"`
-	Done      bool         `json:"done"` // the campaign is completed
+	Done      bool         `json:"done"` // completed or cancelled: nothing more will happen
 	At        time.Time    `json:"at"`
 }
 
@@ -70,7 +70,7 @@ func (s *Service) Progress(ctx context.Context, id int64) (Progress, error) {
 	if err != nil {
 		return Progress{}, err
 	}
-	p.Status, p.Done = c.Status, c.Status == StatusCompleted
+	p.Status, p.Done = c.Status, c.Status == StatusCompleted || c.Status == StatusCancelled
 
 	rows, err := s.db.Query(ctx, `SELECT channel, status, count(*) FROM deliveries
 WHERE campaign_id = $1 GROUP BY channel, status`, id)

@@ -30,8 +30,10 @@ export const FIELD_LABELS = {
 export const STATUS_LABELS = {
   draft: 'Taslak',
   approved: 'Onaylandı',
+  scheduled: 'Zamanlandı',
   sending: 'Gönderiliyor',
   completed: 'Tamamlandı',
+  cancelled: 'İptal edildi',
 } as const
 
 export function formatCount(n: number): string {

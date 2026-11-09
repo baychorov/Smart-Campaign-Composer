@@ -10,11 +10,14 @@ import (
 )
 
 func TestCanTransition(t *testing.T) {
-	all := []Status{StatusDraft, StatusApproved, StatusSending, StatusCompleted}
+	all := []Status{StatusDraft, StatusApproved, StatusScheduled, StatusSending, StatusCompleted, StatusCancelled}
 	allowed := map[[2]Status]bool{
-		{StatusDraft, StatusApproved}:    true,
-		{StatusApproved, StatusSending}:  true,
-		{StatusSending, StatusCompleted}: true,
+		{StatusDraft, StatusApproved}:      true,
+		{StatusDraft, StatusScheduled}:     true,
+		{StatusApproved, StatusSending}:    true,
+		{StatusScheduled, StatusSending}:   true,
+		{StatusScheduled, StatusCancelled}: true,
+		{StatusSending, StatusCompleted}:   true,
 	}
 	// Every pair, so a new edge cannot be added by accident: no way back
 	// to draft, no skipping approval, nothing after completed.

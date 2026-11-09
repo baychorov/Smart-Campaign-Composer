@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/llm"
+	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/segment"
 )
 
 // IdealClient is an llm.Client that answers every request with the
@@ -55,7 +56,14 @@ func (c *IdealClient) Stream(ctx context.Context, req llm.Request, onDelta func(
 	if reply, ok := c.override(found.ID, n); ok {
 		text = reply
 	} else {
-		b, err := json.Marshal(IdealReply(*found))
+		reply := struct {
+			segment.Rule
+			SendAt *string `json:"send_at"`
+		}{Rule: IdealReply(*found)}
+		if found.SendAt != "" {
+			reply.SendAt = &found.SendAt
+		}
+		b, err := json.Marshal(reply)
 		if err != nil {
 			return llm.Response{}, err
 		}

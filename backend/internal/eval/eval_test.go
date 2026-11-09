@@ -69,6 +69,11 @@ func TestScore(t *testing.T) {
 	none := Case{ID: 9, Status: []string{"unsupported", StatusInvalid}, Audience: AudienceNone,
 		Reasons: []segment.Reason{segment.ReasonContradiction}}
 
+	scheduled := Case{ID: 13, Status: []string{"ok"}, Audience: AudienceExact, SendAt: "2026-11-02T10:00:00+03:00"}
+	tomorrow10 := time.Date(2026, 11, 2, 10, 0, 0, 0, segment.Istanbul)
+	tomorrow10UTC := tomorrow10.UTC() // the same instant: zones do not matter
+	tomorrow9 := tomorrow10.Add(-time.Hour)
+
 	okRule := rulePtr(segment.Rule{Status: segment.StatusOK})
 	aggregate := rulePtr(segment.Rule{Status: segment.StatusPartial,
 		Unsupported: []segment.Unsupported{{Text: "3 kez", Reason: segment.ReasonAggregate}}})
@@ -87,6 +92,13 @@ func TestScore(t *testing.T) {
 		extra, miss int
 	}{
 		{"same users", exact, [][]int64{{1, 2, 3}}, Run{Status: "ok", Rule: okRule, Audience: []int64{1, 2, 3}}, true, "", 0, 0},
+		{"send time where none was asked", exact, [][]int64{{1}}, Run{Status: "ok", Rule: okRule, Audience: []int64{1}, SendAt: &tomorrow10},
+			false, "gönderim zamanı beklenmiyordu", 0, 0},
+		{"expected send time", scheduled, [][]int64{{1}}, Run{Status: "ok", Rule: okRule, Audience: []int64{1}, SendAt: &tomorrow10UTC}, true, "", 0, 0},
+		{"send time missing", scheduled, [][]int64{{1}}, Run{Status: "ok", Rule: okRule, Audience: []int64{1}},
+			false, "gönderim zamanı yok, beklenen", 0, 0},
+		{"wrong send time", scheduled, [][]int64{{1}}, Run{Status: "ok", Rule: okRule, Audience: []int64{1}, SendAt: &tomorrow9},
+			false, "gönderim zamanı 2026-11-02T09:00:00+03:00", 0, 0},
 		{"extra and missing users", exact, [][]int64{{1, 2, 3}}, Run{Status: "ok", Rule: okRule, Audience: []int64{2, 3, 4, 5}},
 			false, "kitle farklı: 2 fazla, 1 eksik", 2, 1},
 		{"empty audience is not the expected one", exact, [][]int64{{1}}, Run{Status: "ok", Rule: okRule, Audience: []int64{}},

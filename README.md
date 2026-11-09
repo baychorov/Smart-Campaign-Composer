@@ -89,8 +89,11 @@ flowchart LR
 2. **İçerik:** SMS ve email metni ekrana akarak gelir. Karakter limitleri, değişkenler
    (`{{first_name}}`, `{{city}}`) kitledeki en uzun değerle doldurulmuş en kötü durum için
    kontrol edilir.
-3. **Onay:** Pazarlamacı kanalları seçip onaylar. Kitle onay anında dondurulur
-   (snapshot) ve gönderim kuyruğu aynı transaction'da yazılır.
+3. **Onay:** Pazarlamacı kanalları ve gönderim zamanını seçip onaylar. Brief'te bir zaman
+   varsa ("yarın sabah 10'da gönder") alan dolu gelir; boş bırakılırsa hemen gönderilir.
+   Kitle onay anında dondurulur (snapshot) ve gönderim kuyruğu aynı transaction'da yazılır.
+   Zamanlanmış kampanyanın mesajları gönderim zamanına kadar kuyrukta bekler ve o zamana
+   kadar iptal edilebilir.
 4. **Gönderim ve izleme:** Worker mesajları mock provider'a gönderir; dashboard
    bekleyen, gönderilen, başarısız ve atlanan (izni geri çekilmiş) sayılarını canlı gösterir.
 5. **Geçmiş kampanyalar:** `Kampanyalar` sayfası bütün kampanyaları en yeniden eskiye listeler
@@ -202,6 +205,10 @@ eval 72/75 idi. Hatalar ve düzeltmeler `docs/PLAN.md` adım 14b notunda. 20 bri
 - **"Son N gün" pencereleri** seed verisinin yüklendiği zamana göre kayar; aynı kural
   zamanla farklı sayılar verebilir. Onaylanan kampanyanın kitlesi onay anında sabitlenir.
 - **Mock provider kayıtlarını bellekte tutar;** yeniden başlarsa istatistikleri sıfırlanır.
+- **Zamanlanmış gönderim** en erken 5 dakika, en geç 30 gün sonrasına kurulabilir;
+  tekrarlayan gönderim ("her pazartesi") yoktur. Kitle onay anında hesaplanır: arada
+  kitleye girecek yeni kullanıcılar dahil olmaz, izni geri çekenler ise gönderim anında
+  atlanır. Gönderim başladıktan sonra durdurulamaz.
 - **Manuel "tekrar gönder" yok;** deneme hakkı biten mesajlar `failed` kalır ve son hata
   dashboard'da görünür.
 

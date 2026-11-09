@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/segment"
 )
@@ -55,13 +56,48 @@ func decodeStrict(text string, v any) error {
 	return nil
 }
 
-// decodeRule parses model output strictly: unknown fields and trailing data
-// are errors. Missing fields become zero values; segment.Validate rejects
-// those (empty status, missing condition fields and so on).
-func decodeRule(text string) (segment.Rule, error) {
-	var r segment.Rule
-	if err := decodeStrict(text, &r); err != nil {
-		return segment.Rule{}, fmt.Errorf("decode rule: %w", err)
+// segmentOutput is the model's answer: the audience rule plus the send time
+// it read from the brief. The send time is not part of segment.Rule because
+// it says nothing about the audience; the campaign stores it separately.
+type segmentOutput struct {
+	segment.Rule
+	SendAt *string `json:"send_at"`
+}
+
+// decodeSegmentOutput parses model output strictly: unknown fields and
+// trailing data are errors. Missing fields become zero values;
+// segment.Validate rejects those (empty status, missing condition fields
+// and so on).
+func decodeSegmentOutput(text string) (segmentOutput, error) {
+	var out segmentOutput
+	if err := decodeStrict(text, &out); err != nil {
+		return segmentOutput{}, fmt.Errorf("decode rule: %w", err)
 	}
-	return r, nil
+	return out, nil
+}
+
+// decodeRule is decodeSegmentOutput without the send time.
+func decodeRule(text string) (segment.Rule, error) {
+	out, err := decodeSegmentOutput(text)
+	return out.Rule, err
+}
+
+// sendAtLayouts are the forms a suggested send time is accepted in. The
+// schema asks for RFC 3339; the others are lenient fallbacks, read as
+// Turkey time when there is no offset.
+var sendAtLayouts = []string{time.RFC3339, "2006-01-02T15:04Z07:00", "2006-01-02T15:04:05", "2006-01-02T15:04"}
+
+// parseSendAt reads the model's suggested send time. A suggestion that
+// cannot be read is dropped, not repaired: the marketer picks the time on
+// the approval screen anyway.
+func parseSendAt(s *string) (*time.Time, bool) {
+	if s == nil || *s == "" {
+		return nil, true
+	}
+	for _, layout := range sendAtLayouts {
+		if t, err := time.ParseInLocation(layout, *s, segment.Istanbul); err == nil {
+			return &t, true
+		}
+	}
+	return nil, false
 }

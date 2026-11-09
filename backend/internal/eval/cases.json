@@ -113,9 +113,9 @@
     "status": ["unsupported"], "audience": "none", "reasons": ["unknown_field"]
   },
   {
-    "id": 13, "category": "Kitle dışı",
+    "id": 13, "category": "Gönderim zamanı",
     "brief": "Son 30 günde alışveriş yapan Bursalılara yarın sabah 10'da sadece SMS ile gönder.",
-    "status": ["partial"], "audience": "exact", "reasons": ["scheduling"],
+    "status": ["ok"], "audience": "exact", "send_at": "2026-11-02T10:00:00+03:00",
     "rules": [
       {"common": [
         {"type": "attribute", "field": "city", "op": "in", "values": ["Bursa"]},

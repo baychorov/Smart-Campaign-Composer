@@ -1,5 +1,6 @@
 import type { Campaign, Issue } from '../api/types'
 import type { GenPhase } from './generation'
+import { sendAtIssue } from './schedule'
 
 // Why the approve button is disabled, in the marketer's words. This mirrors
 // the backend's checks (campaign.precheck, contentIssues) so the button is
@@ -14,6 +15,9 @@ export interface ApprovalInput {
   /** The editor has changes not yet saved with PUT /content. */
   dirty: boolean
   busy: boolean
+  /** The send time input (Turkey time); empty sends now. */
+  sendAt: string
+  now: Date
 }
 
 /** Content errors that matter for the chosen channels. */
@@ -34,6 +38,8 @@ export function blockingReasons(i: ApprovalInput): string[] {
 
   if (!i.channels.sms && !i.channels.email) out.push('En az bir kanal seç')
   if (c.rule.status === 'partial' && !i.partialAck) out.push('Uygulanmayan kriterleri onayla')
+  const timeIssue = sendAtIssue(i.sendAt, i.now)
+  if (timeIssue) out.push(timeIssue)
   if (i.busy) out.push('İşlem sürüyor')
   return out
 }

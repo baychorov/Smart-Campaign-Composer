@@ -12,6 +12,7 @@ function mountBar(props: Record<string, unknown> = {}) {
       busy: false,
       channels: { sms: true, email: true },
       partialAck: false,
+      sendAt: '',
       ...props,
     },
   })
@@ -34,6 +35,18 @@ describe('ApprovalBar', () => {
     const w = mountBar({ partial: true })
     await w.get('[data-test="partial-ack"]').setValue(true)
     expect(w.emitted('update:partialAck')![0]).toEqual([true])
+  })
+
+  it('shows the send time and switches the button between send and schedule', async () => {
+    const now = mountBar()
+    expect(now.get('[data-test="approve"]').text()).toContain('Onayla ve gönder')
+    expect(now.find('[data-test="send-now"]').exists()).toBe(false)
+
+    const later = mountBar({ sendAt: '2026-11-02T10:00' })
+    expect((later.get('[data-test="send-at"]').element as HTMLInputElement).value).toBe('2026-11-02T10:00')
+    expect(later.get('[data-test="approve"]').text()).toContain('Onayla ve zamanla')
+    await later.get('[data-test="send-now"]').trigger('click')
+    expect(later.emitted('update:sendAt')![0]).toEqual([''])
   })
 
   it('reports channel changes and the click', async () => {

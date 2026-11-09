@@ -384,3 +384,39 @@ func TestSegmentResultUsage(t *testing.T) {
 		t.Errorf("second attempt should be repair 1: %+v", res.Attempts)
 	}
 }
+
+func TestExtractSegmentSendAt(t *testing.T) {
+	withSend := func(v string) string {
+		return strings.Replace(goodIstanbul, `"notes":[]`, `"notes":[],"send_at":`+v, 1)
+	}
+	tests := []struct {
+		name     string
+		reply    string
+		want     string // RFC 3339 in Turkey time; empty means nil
+		wantWarn bool
+	}{
+		{"null", withSend("null"), "", false},
+		{"missing (older replies, tests)", goodIstanbul, "", false},
+		{"RFC 3339 with offset", withSend(`"2026-11-02T10:00:00+03:00"`), "2026-11-02T10:00:00+03:00", false},
+		{"UTC is converted", withSend(`"2026-11-02T07:00:00Z"`), "2026-11-02T10:00:00+03:00", false},
+		{"no offset means Turkey time", withSend(`"2026-11-02T10:00"`), "2026-11-02T10:00:00+03:00", false},
+		{"unreadable is dropped with a warning", withSend(`"yarın sabah"`), "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := ExtractSegment(context.Background(), NewFake(Text(tt.reply)), briefIstanbul, testToday)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := formatSendAt(res.SendAt); got != tt.want {
+				t.Errorf("send_at %q, want %q", got, tt.want)
+			}
+			if got := hasCode(res.Validation.Warnings, IssueInvalidSendAt); got != tt.wantWarn {
+				t.Errorf("warning = %v, want %v (%v)", got, tt.wantWarn, res.Validation.Warnings)
+			}
+			if res.Repairs != 0 {
+				t.Errorf("a send time must never cause a repair")
+			}
+		})
+	}
+}

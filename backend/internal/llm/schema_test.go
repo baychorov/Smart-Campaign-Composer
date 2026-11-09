@@ -103,7 +103,13 @@ func sorted[T ~string](vs ...T) []string {
 // fails.
 func TestSegmentSchemaMatchesRule(t *testing.T) {
 	s := SegmentSchema()
-	root := checkObject(t, "rule", s, jsonFields(reflect.TypeFor[segment.Rule]()))
+	rootFields := append(jsonFields(reflect.TypeFor[segment.Rule]()), "send_at")
+	sort.Strings(rootFields)
+	root := checkObject(t, "rule", s, rootFields)
+	sendAt := obj(t, root["send_at"], "send_at")["anyOf"].([]any)
+	if obj(t, sendAt[0], "send_at")["format"] != "date-time" || obj(t, sendAt[1], "send_at")["type"] != "null" {
+		t.Errorf("send_at must be a date-time or null: %v", sendAt)
+	}
 
 	if got, want := enumOf(t, root["status"], "status"), sorted(segment.StatusOK, segment.StatusPartial, segment.StatusUnsupported, segment.StatusRejected); !slices.Equal(got, want) {
 		t.Errorf("status enum %v, want %v", got, want)

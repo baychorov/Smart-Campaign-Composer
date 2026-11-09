@@ -64,7 +64,7 @@ describe('CampaignView', () => {
     expect(calls.at(-1)).toEqual({
       method: 'POST',
       path: '/api/campaigns/7/approve',
-      body: { channels: { sms: true, email: false }, partial_ack: true },
+      body: { channels: { sms: true, email: false }, partial_ack: true, send_at: null },
     })
     expect(w.get('[data-test="status"]').text()).toBe('Onaylandı')
 
@@ -121,5 +121,65 @@ describe('CampaignView', () => {
     expect(w.text()).toContain('Kampanya onaylanamadı.')
     expect(w.text()).toContain('SMS en kötü durumda 161 karakter')
     expect(w.get('[data-test="status"]').text()).toBe('Taslak')
+  })
+
+  it('fills the send time from the brief and schedules with it', async () => {
+    vi.useFakeTimers({ now: new Date('2026-11-01T09:00:00Z'), toFake: ['Date'] })
+    const draft = makeCampaign({ message: goodMessage, content_validation: validValidation, send_at: '2026-11-02T07:00:00Z' })
+    const scheduled: Campaign = { ...draft, status: 'scheduled', approved_at: '2026-11-01T09:00:00Z', content_validation: null }
+    const calls = fakeFetch({
+      'GET /api/campaigns/7': () => ({ json: { campaign: draft } }),
+      'POST /api/campaigns/7/approve': () => ({ json: { campaign: scheduled, snapshot: { sms: 111, email: 118 } } }),
+    })
+    const w = mountView()
+    await flushPromises()
+
+    const input = w.get('[data-test="send-at"]')
+    expect((input.element as HTMLInputElement).value).toBe('2026-11-02T10:00') // Turkey time
+    await input.setValue('2026-11-03T09:30') // the marketer changes it on the approval screen
+    await w.get('[data-test="approve"]').trigger('click')
+    await flushPromises()
+
+    expect(calls.at(-1)!.body).toEqual({ channels: { sms: true, email: true }, partial_ack: false, send_at: '2026-11-03T09:30:00+03:00' })
+    expect(w.get('[data-test="status"]').text()).toBe('Zamanlandı')
+    expect(w.get('[data-test="scheduled"]').text()).toContain('10:00')
+    vi.useRealTimers()
+  })
+
+  it('cancels a scheduled campaign after confirmation', async () => {
+    const scheduled = makeCampaign({ status: 'scheduled', approved_at: '2026-11-01T09:00:00Z', send_at: '2026-11-02T07:00:00Z' })
+    const calls = fakeFetch({
+      'GET /api/campaigns/7': () => ({ json: { campaign: scheduled } }),
+      'POST /api/campaigns/7/cancel': () => ({ json: { campaign: { ...scheduled, status: 'cancelled' } } }),
+    })
+    const w = mountView()
+    await flushPromises()
+
+    await w.get('[data-test="cancel"]').trigger('click')
+    expect(calls.map((c) => c.path)).not.toContain('/api/campaigns/7/cancel')
+    await w.get('[data-test="confirm-cancel"]').trigger('click')
+    await flushPromises()
+
+    expect(w.get('[data-test="status"]').text()).toBe('İptal edildi')
+    expect(w.find('[data-test="cancelled"]').exists()).toBe(true)
+  })
+
+  it('shows that sending won when the cancel comes too late', async () => {
+    const scheduled = makeCampaign({ status: 'scheduled', approved_at: '2026-11-01T09:00:00Z', send_at: '2026-11-02T07:00:00Z' })
+    let current = scheduled
+    fakeFetch({
+      'GET /api/campaigns/7': () => ({ json: { campaign: current } }),
+      'POST /api/campaigns/7/cancel': () => {
+        current = { ...scheduled, status: 'sending' }
+        return { status: 409, json: { error: 'sending_started', message: 'Gönderim bu sırada başladı; kampanya iptal edilemedi.' } }
+      },
+    })
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-test="cancel"]').trigger('click')
+    await w.get('[data-test="confirm-cancel"]').trigger('click')
+    await flushPromises()
+
+    expect(w.get('[data-test="status"]').text()).toBe('Gönderiliyor')
   })
 })

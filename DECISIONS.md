@@ -310,6 +310,18 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Sınırlar:** Onaydan sonra kitleye giren yeni kullanıcılar bu kampanyaya dahil edilmez.
 - **Güncelleme (2026-11-07, PLAN adım 7):** Snapshot'taki "son N gün" pencereleri onay anına (`approved_at`) sabitlenir. Taslakta gösterilen sayılar kural üzerinden canlı hesaplanır; onaydan sonra `deliveries` tablosundan okunur. Kitle boşsa onay reddedilir (`empty_audience`).
   - **Sınır:** Kural doğrulamasının uyarıları (ör. kapsama uyarısı) yalnızca oluşturma ve kural düzenleme yanıtında döner, saklanmaz.
+- **Güncelleme (2026-11-09, PLAN adım 15a, kullanıcı kararı): Zamanlanmış gönderimde de kitle onay anında hesaplanır.** Snapshot onayda yazılır, kuyruk satırları `next_attempt_at = gönderim zamanı` ile bekler. Pazarlamacının onayladığı kişi sayısı ve içerik kontrolü, gönderilenle aynıdır. Alternatif (kitleyi gönderim anında hesaplamak) elendi: sayı ve en kötü durum karakter kontrolü gönderim anında, kimse başında değilken değişebilirdi. İzin geri çekme gönderim anındaki kontrolle yine korunur (D-DEDUP).
+
+## D-SCHEDULE: Zamanlanmış gönderim (Bölüm 9 bonus)
+
+- **Karar (2026-11-09, PLAN adım 15a):**
+  - **Mekanizma:** Ayrı bir zamanlayıcı yok. Onay, kuyruğu ileri tarihli yazar (`next_attempt_at`); worker'ın mevcut satır alma sorgusu zamanı gelmemiş satırları zaten almaz. Kampanya `scheduled` olur ve ilk satır alındığında `sending`'e geçer.
+  - **Zamanın kaynağı:** Model brief'teki gönderim zamanını `send_at` olarak önerir (saat yoksa 10:00, varsayım olarak yazılır). Bu yalnızca bir öneridir: onay ekranındaki tarih-saat alanına dolu gelir, pazarlamacı değiştirebilir ya da boşaltıp hemen gönderebilir. Son karar D-CHANNEL'daki gibi insanındır. Gönderim zamanı kitle kriteri değildir; status'ü etkilemez ve `unsupported`'a yazılmaz (adım 13'teki "zaman ifadeleri" kararının gönderim zamanı kısmının yerini alır).
+  - **Sınırlar:** En erken 5 dakika, en geç 30 gün sonrası. Türkiye saati (UTC+3).
+  - **İptal ve yarış önceliği (kullanıcı kararı: öncelik net olmalı):** Kuyruk satırlarını önce kilitleyen kazanır. Worker satırları `FOR UPDATE SKIP LOCKED` ile, iptal `FOR UPDATE NOWAIT` ile kilitler. Worker bir satırı bile almışsa iptal hemen başarısız olur ve geri alınır (`409 sending_started`); gönderim kesilmez. İptal önce kilitlerse worker satırları atlar ve iptal onları siler. Hiçbir taraf beklemediği için deadlock oluşmaz.
+- **Gerekçe:** Mevcut kuyruk, retry, rate limit ve idempotency hiç değişmeden zamanlanmış gönderime de uygulanır; yeni bir süreç veya altyapı gerekmez (D-DB). Gönderim başladıktan sonra iptal edilememesi yarım gönderilmiş kampanyaları önler.
+- **Alternatifler:** Gönderim anında kitle hesaplayan bir zamanlayıcı döngüsü (yukarıda D-SNAPSHOT güncellemesi), harici zamanlayıcı (pg_cron, iş kuyruğu kütüphaneleri: yeni altyapı), bellekte zamanlayıcı (süreç yeniden başlarsa kaybolur). Zamanı yalnızca pazarlamacının girmesi: brief'te zaten yazılı olanı tekrar girmek gereksiz iş (kullanıcı kararı).
+- **Sınırlar:** Tekrarlayan gönderim yok. Gönderim başladıktan sonra durdurma yok. Onaydan sonra kitleye giren kullanıcılar dahil edilmez. Zamanlanmış kampanyanın zamanı onaydan sonra değiştirilemez; iptal edip yeni kampanya açmak gerekir.
 
 ## D-OBS: Gözlemlenebilirlik (R-OBS-1..3)
 

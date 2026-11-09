@@ -22,6 +22,8 @@ type Run struct {
 	Audience []int64
 	// Unsafe is set when the compiled SQL failed the safety check.
 	Unsafe string
+	// SendAt is the send time the model read from the brief, or nil.
+	SendAt *time.Time
 
 	Repairs      int
 	Calls        int
@@ -84,6 +86,12 @@ func Score(c Case, expected [][]int64, r Run) Verdict {
 		if c.NeedsAssumption && len(r.Rule.Assumptions) == 0 {
 			problem("varsayım yazılmadı")
 		}
+		switch want, ok := parseSendAt(c.SendAt); {
+		case !ok && r.SendAt != nil:
+			problem("gönderim zamanı beklenmiyordu, %s önerildi", formatSendAt(r.SendAt))
+		case ok && (r.SendAt == nil || !r.SendAt.Equal(want)):
+			problem("gönderim zamanı %s, beklenen %s", formatSendAt(r.SendAt), c.SendAt)
+		}
 	}
 
 	v.Correct = len(v.Problems) == 0
@@ -111,13 +119,27 @@ func diff(got, want []int64) (extra, missing int) {
 }
 
 // fingerprint identifies a run's result for the consistency check: two
-// runs agree when they have the same status and select the same users.
+// runs agree when they have the same status, select the same users and
+// suggest the same send time.
 func fingerprint(r Run) string {
 	h := fnv.New64a()
 	for _, id := range r.Audience {
 		fmt.Fprintf(h, "%d,", id)
 	}
-	return fmt.Sprintf("%s/%d/%x", r.Status, len(r.Audience), h.Sum64())
+	return fmt.Sprintf("%s/%d/%x/%s", r.Status, len(r.Audience), h.Sum64(), formatSendAt(r.SendAt))
+}
+
+func parseSendAt(s string) (time.Time, bool) {
+	t, err := time.Parse(time.RFC3339, s)
+	return t, s != "" && err == nil
+}
+
+// formatSendAt writes a send time in Turkey time; "yok" when there is none.
+func formatSendAt(t *time.Time) string {
+	if t == nil {
+		return "yok"
+	}
+	return t.In(segment.Istanbul).Format(time.RFC3339)
 }
 
 // Consistent reports whether all runs of a brief gave the same result. A

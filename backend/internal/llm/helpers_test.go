@@ -103,3 +103,28 @@ func hasCode(issues []segment.Issue, code string) bool {
 
 // testToday is the date segment prompts are built with in tests.
 var testToday = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+
+// withSendAt adds "send_at" to a reply produced by mustJSON; empty is null.
+func withSendAt(t *testing.T, reply, sendAt string) string {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal([]byte(reply), &m); err != nil {
+		t.Fatal(err)
+	}
+	m["send_at"] = nil
+	if sendAt != "" {
+		m["send_at"] = sendAt
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func formatSendAt(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.In(segment.Istanbul).Format(time.RFC3339)
+}

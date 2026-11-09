@@ -544,3 +544,87 @@ func TestCampaignListAndDelete(t *testing.T) {
 		t.Error("deletion is not logged")
 	}
 }
+
+func TestScheduleAndCancel(t *testing.T) {
+	// The model suggests tomorrow 10:00 (Turkey) for the first campaign.
+	suggested := strings.Replace(caseRuleJSON, `"notes":[`, `"send_at":"2026-06-16T10:00:00+03:00","notes":[`, 1)
+	if suggested == caseRuleJSON {
+		t.Fatal("test rule has no notes field to extend")
+	}
+	fake := llm.NewFake(llm.Text(suggested), llm.Text(caseRuleJSON))
+	env := newCampaignEnv(t, fake)
+	api := env.api
+
+	status, out := api.do("POST", "/api/campaigns", `{"brief":"İstanbul'da sepeti terk edenlere yarın 10'da gönder"}`)
+	if status != http.StatusCreated {
+		t.Fatalf("create: %d %v", status, out)
+	}
+	c := campaignOf(t, out)
+	path := idPath(c)
+	if !sameInstant(c["send_at"], "2026-06-16T07:00:00Z") || c["status"] != "draft" {
+		t.Fatalf("draft send_at %v, status %v", c["send_at"], c["status"])
+	}
+	if status, out = api.do("PUT", path+"/content", messageText(t, goodMessage)); status != http.StatusOK {
+		t.Fatalf("save content: %d %v", status, out)
+	}
+
+	// A time too soon is refused; the marketer's own time is used.
+	status, out = api.do("POST", path+"/approve", `{"channels":{"sms":true,"email":true},"send_at":"2026-06-15T12:01:00Z"}`)
+	if status != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(out["issues"]), "invalid_send_at") {
+		t.Fatalf("too soon: %d %v", status, out)
+	}
+	status, out = api.do("POST", path+"/approve", `{"channels":{"sms":true,"email":true},"send_at":"2026-06-17T09:30:00+03:00"}`)
+	if status != http.StatusOK {
+		t.Fatalf("approve scheduled: %d %v", status, out)
+	}
+	c = campaignOf(t, out)
+	if c["status"] != "scheduled" || !sameInstant(c["send_at"], "2026-06-17T06:30:00Z") {
+		t.Fatalf("scheduled campaign %v %v", c["status"], c["send_at"])
+	}
+
+	// Cancel once; the second time and an unscheduled campaign get 409.
+	status, out = api.do("POST", path+"/cancel", "")
+	if status != http.StatusOK || campaignOf(t, out)["status"] != "cancelled" {
+		t.Fatalf("cancel: %d %v", status, out)
+	}
+	if status, out = api.do("POST", path+"/cancel", ""); status != http.StatusConflict || out["error"] != "not_scheduled" {
+		t.Fatalf("cancel twice: %d %v", status, out)
+	}
+	status, out = api.do("POST", "/api/campaigns", `{"brief":"İstanbul"}`)
+	if status != http.StatusCreated || campaignOf(t, out)["send_at"] != nil {
+		t.Fatalf("draft without a suggestion: %d %v", status, out)
+	}
+	if status, out = api.do("POST", idPath(campaignOf(t, out))+"/cancel", ""); status != http.StatusConflict {
+		t.Fatalf("cancel a draft: %d %v", status, out)
+	}
+	if status, _ = api.do("POST", "/api/campaigns/999999/cancel", ""); status != http.StatusNotFound {
+		t.Fatalf("cancel missing: %d", status)
+	}
+
+	// The dashboard stream of a cancelled campaign ends at once.
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, api.url+path+"/events", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	evs := readEvents(t, resp.Body) // returns when the stream closes
+	last := evs[len(evs)-1].Data
+	if last["done"] != true || last["status"] != "cancelled" {
+		t.Fatalf("last progress event %v", last)
+	}
+}
+
+// sameInstant compares a JSON time with want as instants; the API writes
+// times in the server's zone.
+func sameInstant(got any, want string) bool {
+	s, ok := got.(string)
+	if !ok {
+		return false
+	}
+	a, err1 := time.Parse(time.RFC3339, s)
+	b, err2 := time.Parse(time.RFC3339, want)
+	return err1 == nil && err2 == nil && a.Equal(b)
+}

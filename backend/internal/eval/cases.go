@@ -53,6 +53,9 @@ type Case struct {
 	// Reasons must all appear in the rule's unsupported list.
 	Reasons         []segment.Reason `json:"reasons"`
 	NeedsAssumption bool             `json:"needs_assumption"`
+	// SendAt is the send time the brief asks for (RFC 3339), relative to
+	// the eval's fixed "today". Empty means the run must suggest none.
+	SendAt string `json:"send_at,omitempty"`
 }
 
 // LoadCases returns the embedded test set after checking it.
@@ -82,6 +85,10 @@ func checkCases(cases []Case) error {
 			return fmt.Errorf("case %d: unknown audience %q", c.ID, c.Audience)
 		case c.Audience == AudienceExact && len(c.Rules) == 0:
 			return fmt.Errorf("case %d: exact audience needs at least one rule", c.ID)
+		case c.SendAt != "":
+			if _, ok := parseSendAt(c.SendAt); !ok {
+				return fmt.Errorf("case %d: send_at %q is not RFC 3339", c.ID, c.SendAt)
+			}
 		}
 		seen[c.ID] = true
 		for j, r := range c.Rules {

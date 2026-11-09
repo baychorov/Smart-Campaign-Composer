@@ -2,8 +2,10 @@
 import { computed, onMounted, ref } from 'vue'
 import { api } from '../api/client'
 import type { Campaign, ChannelProgress, Progress } from '../api/types'
+import { toApiError } from '../composables/useCampaign'
 import { useEventStream } from '../composables/useEventStream'
 import { formatCount, STATUS_LABELS } from '../lib/labels'
+import { formatTurkey } from '../lib/schedule'
 import Sparkline from './Sparkline.vue'
 
 // Live sending state (R-OBS-1). The server sends the full summary about once
@@ -11,6 +13,7 @@ import Sparkline from './Sparkline.vue'
 // after the event with done: true.
 
 const props = defineProps<{ campaign: Campaign }>()
+const emit = defineEmits<{ update: [campaign: Campaign]; reload: [] }>()
 
 const RATE_HISTORY = 60
 const progress = ref<Progress | null>(null)
@@ -53,6 +56,30 @@ const CELLS: [keyof ChannelProgress, string][] = [
   ['skipped', 'atlandı'],
 ]
 
+// Cancelling a scheduled campaign (PLAN step 15a), in two steps. If the
+// worker took the first messages in the meantime, sending wins and the
+// page reloads to show it.
+const confirmingCancel = ref(false)
+const cancelling = ref(false)
+const cancelError = ref<string | null>(null)
+
+async function cancelSchedule() {
+  cancelling.value = true
+  cancelError.value = null
+  try {
+    const out = await api.cancel(props.campaign.id)
+    confirmingCancel.value = false
+    emit('update', out.campaign)
+  } catch (e) {
+    const err = toApiError(e)
+    cancelError.value = err.message
+    confirmingCancel.value = false
+    if (err.code === 'sending_started' || err.code === 'not_scheduled') emit('reload')
+  } finally {
+    cancelling.value = false
+  }
+}
+
 const approvedAt = computed(() =>
   props.campaign.approved_at ? new Date(props.campaign.approved_at).toLocaleString('tr-TR') : '—',
 )
@@ -90,7 +117,7 @@ const approvedAt = computed(() =>
           Onay: {{ approvedAt }} ·
           <template v-if="stream.state.value === 'open'">canlı, saniyede bir güncelleniyor</template>
           <template v-else-if="stream.state.value === 'connecting'">bağlanıyor…</template>
-          <template v-else-if="progress?.done">gönderim tamamlandı, akış kapandı</template>
+          <template v-else-if="progress?.done">{{ status === 'cancelled' ? 'kampanya iptal edildi' : 'gönderim tamamlandı' }}, akış kapandı</template>
           <template v-else-if="stream.state.value === 'error'">
             canlı bağlantı kurulamadı <button type="button" class="btn btn-sm" @click="connect">Tekrar bağlan</button>
           </template>
@@ -98,6 +125,24 @@ const approvedAt = computed(() =>
         <p v-if="status === 'approved' && progress && finished === 0" class="note note-info">
           Kampanya onaylandı ve kuyruğa yazıldı. Gönderim, worker mesajları almaya başlayınca burada görünür.
         </p>
+        <div v-if="status === 'scheduled'" class="note note-info schedule" data-test="scheduled">
+          <span>
+            Gönderim <b>{{ campaign.send_at ? formatTurkey(campaign.send_at) : '—' }}</b> (Türkiye saati) tarihinde başlayacak.
+            Kitle onay anında hesaplandı; mesajlar o zamana kadar kuyrukta bekliyor.
+          </span>
+          <button v-if="!confirmingCancel" type="button" class="btn btn-sm" data-test="cancel" @click="confirmingCancel = true">
+            Zamanlamayı iptal et
+          </button>
+          <span v-else class="confirm">
+            Kampanya iptal edilecek ve hiç mesaj gönderilmeyecek.
+            <button type="button" class="btn btn-sm btn-danger" :disabled="cancelling" data-test="confirm-cancel" @click="cancelSchedule">İptal et</button>
+            <button type="button" class="btn btn-sm" :disabled="cancelling" @click="confirmingCancel = false">Vazgeç</button>
+          </span>
+        </div>
+        <p v-if="status === 'cancelled'" class="note note-plain" data-test="cancelled">
+          Kampanya gönderimden önce iptal edildi; hiç mesaj gönderilmedi.
+        </p>
+        <p v-if="cancelError" class="note note-bad" role="alert">{{ cancelError }}</p>
       </div>
     </section>
 
@@ -206,6 +251,26 @@ const approvedAt = computed(() =>
   padding: 4px 12px;
   background: var(--info-soft);
   color: var(--info);
+}
+.schedule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.btn-danger {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: var(--accent-ink);
+}
+.btn-danger:hover:not(:disabled) {
+  color: var(--accent-ink);
 }
 .status-pill.completed {
   background: var(--ok-soft);

@@ -47,7 +47,9 @@ RETURNING d.id, d.campaign_id, d.channel, d.attempts, d.throttles,
     coalesce(c.sms_text, ''), coalesce(c.email_subject, ''), coalesce(c.email_body, '')`
 
 // Claim implements Store. Campaigns whose first rows are claimed move from
-// approved to sending in the same transaction.
+// approved (or scheduled) to sending in the same transaction. A scheduled
+// campaign's rows are not due before its send time (next_attempt_at), so
+// the claim query needs no other change for scheduling.
 func (s *PGStore) Claim(ctx context.Context, ch Channel, limit int, now, leaseUntil time.Time) ([]Job, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -80,7 +82,7 @@ func (s *PGStore) Claim(ctx context.Context, ch Channel, limit int, now, leaseUn
 	}
 	if _, err := tx.Exec(ctx, `
 UPDATE campaigns SET status = 'sending', updated_at = $2
-WHERE id = ANY($1) AND status = 'approved'`, ids, now); err != nil {
+WHERE id = ANY($1) AND status IN ('approved', 'scheduled')`, ids, now); err != nil {
 		return nil, fmt.Errorf("mark campaigns sending: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {

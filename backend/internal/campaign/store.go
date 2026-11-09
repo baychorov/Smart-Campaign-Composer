@@ -54,14 +54,14 @@ type querier interface {
 // are coalesced so they scan into plain strings.
 const columns = `id, brief, status, rule,
     coalesce(sms_text, ''), coalesce(email_subject, ''), coalesce(email_body, ''),
-    send_sms, send_email, partial_ack_at, approved_at, created_at, updated_at`
+    send_sms, send_email, partial_ack_at, approved_at, created_at, updated_at, scheduled_at`
 
 func scanCampaign(row pgx.Row) (Campaign, error) {
 	var c Campaign
 	var rule []byte
 	err := row.Scan(&c.ID, &c.Brief, &c.Status, &rule,
 		&c.Message.SMS, &c.Message.EmailSubject, &c.Message.EmailBody,
-		&c.SendSMS, &c.SendEmail, &c.PartialAckAt, &c.ApprovedAt, &c.CreatedAt, &c.UpdatedAt)
+		&c.SendSMS, &c.SendEmail, &c.PartialAckAt, &c.ApprovedAt, &c.CreatedAt, &c.UpdatedAt, &c.ScheduledAt)
 	if err != nil {
 		return Campaign{}, err
 	}
@@ -94,13 +94,25 @@ func (s *Service) Create(ctx context.Context, brief string) (Campaign, llm.Segme
 	if err != nil {
 		return Campaign{}, res, fmt.Errorf("encode rule: %w", err)
 	}
+	// The send time read from the brief is kept as a suggestion for the
+	// approval screen. One the approval would refuse is dropped here, with a
+	// warning, so the marketer is not shown a time that cannot be used.
+	sendAt := res.SendAt
+	if sendAt != nil {
+		if is := checkSendAt(*sendAt, s.now()); is != nil {
+			res.Validation.Warnings = append(res.Validation.Warnings,
+				segment.Issue{Path: "send_at", Code: is.Code, Message: "Brief'teki gönderim zamanı kullanılamadı: " + is.Message})
+			sendAt = nil
+		}
+	}
+
 	ctx, cancel = context.WithTimeout(ctx, dbTimeout)
 	defer cancel()
 	// Both channels start selected (D-CHANNEL); approval sets the final choice.
 	row := s.db.QueryRow(ctx, `
-INSERT INTO campaigns (brief, status, rule, send_sms, send_email, created_at, updated_at)
-VALUES ($1, $2, $3, true, true, $4, $4)
-RETURNING `+columns, brief, StatusDraft, rule, s.now())
+INSERT INTO campaigns (brief, status, rule, send_sms, send_email, created_at, updated_at, scheduled_at)
+VALUES ($1, $2, $3, true, true, $4, $4, $5)
+RETURNING `+columns, brief, StatusDraft, rule, s.now(), sendAt)
 	c, err := scanCampaign(row)
 	if err != nil {
 		return Campaign{}, res, fmt.Errorf("insert campaign: %w", err)

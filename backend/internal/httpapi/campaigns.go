@@ -15,19 +15,22 @@ import (
 
 // campaignView is the JSON shape of a campaign.
 type campaignView struct {
-	ID           int64              `json:"id"`
-	Brief        string             `json:"brief"`
-	Status       campaign.Status    `json:"status"`
-	Rule         segment.Rule       `json:"rule"`
-	Summary      segment.Summary    `json:"summary"`
-	Approvable   bool               `json:"approvable"`
-	Message      content.Message    `json:"message"`
-	Channels     channels           `json:"channels"`
-	PartialAckAt *time.Time         `json:"partial_ack_at"`
-	ApprovedAt   *time.Time         `json:"approved_at"`
-	CreatedAt    time.Time          `json:"created_at"`
-	UpdatedAt    time.Time          `json:"updated_at"`
-	Audience     *campaign.Audience `json:"audience"` // null when the rule has no audience
+	ID           int64           `json:"id"`
+	Brief        string          `json:"brief"`
+	Status       campaign.Status `json:"status"`
+	Rule         segment.Rule    `json:"rule"`
+	Summary      segment.Summary `json:"summary"`
+	Approvable   bool            `json:"approvable"`
+	Message      content.Message `json:"message"`
+	Channels     channels        `json:"channels"`
+	PartialAckAt *time.Time      `json:"partial_ack_at"`
+	ApprovedAt   *time.Time      `json:"approved_at"`
+	// SendAt: for a draft the send time suggested from the brief, after
+	// approval the scheduled time; null means "now".
+	SendAt    *time.Time         `json:"send_at"`
+	CreatedAt time.Time          `json:"created_at"`
+	UpdatedAt time.Time          `json:"updated_at"`
+	Audience  *campaign.Audience `json:"audience"` // null when the rule has no audience
 	// ContentValidation checks the stored message against the current
 	// audience; null for a non-draft or a draft without message text.
 	ContentValidation *contentValidation `json:"content_validation"`
@@ -63,6 +66,7 @@ func (s *Server) view(ctx context.Context, c campaign.Campaign) (campaignView, e
 		Channels:     channels{SMS: c.SendSMS, Email: c.SendEmail},
 		PartialAckAt: c.PartialAckAt,
 		ApprovedAt:   c.ApprovedAt,
+		SendAt:       c.ScheduledAt,
 		CreatedAt:    c.CreatedAt,
 		UpdatedAt:    c.UpdatedAt,
 	}
@@ -116,6 +120,10 @@ func (s *Server) writeCampaignError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "not_found", "Kampanya bulunamadı.")
 	case errors.Is(err, campaign.ErrNotDraft):
 		writeError(w, http.StatusConflict, "not_draft", "Kampanya artık taslak değil; değiştirilemez veya tekrar onaylanamaz.")
+	case errors.Is(err, campaign.ErrNotScheduled):
+		writeError(w, http.StatusConflict, "not_scheduled", "Yalnızca zamanlanmış ve henüz gönderilmeye başlanmamış bir kampanya iptal edilebilir.")
+	case errors.Is(err, campaign.ErrSendingStarted):
+		writeError(w, http.StatusConflict, "sending_started", "Gönderim bu sırada başladı; kampanya iptal edilemedi.")
 	case errors.Is(err, campaign.ErrNotApprovable):
 		writeError(w, http.StatusUnprocessableEntity, "rule_not_approvable", "Kural bir kitle tanımlamıyor.")
 	case errors.As(err, &ruleErr):
@@ -316,26 +324,45 @@ func (s *Server) startGeneration(w http.ResponseWriter, r *http.Request) {
 }
 
 // approveCampaign: POST /api/campaigns/{id}/approve
-// {channels: {sms, email}, partial_ack}.
+// {channels: {sms, email}, partial_ack, send_at}. send_at is an RFC 3339
+// time or null (send now).
 func (s *Server) approveCampaign(w http.ResponseWriter, r *http.Request) {
 	id, ok := campaignID(w, r)
 	if !ok {
 		return
 	}
 	var req struct {
-		Channels   channels `json:"channels"`
-		PartialAck bool     `json:"partial_ack"`
+		Channels   channels   `json:"channels"`
+		PartialAck bool       `json:"partial_ack"`
+		SendAt     *time.Time `json:"send_at"`
 	}
 	if !decodeBody(w, r, &req) {
 		return
 	}
 	c, snap, err := s.cfg.Campaigns.Approve(r.Context(), id, campaign.ApproveRequest{
-		SMS: req.Channels.SMS, Email: req.Channels.Email, PartialAck: req.PartialAck,
+		SMS: req.Channels.SMS, Email: req.Channels.Email, PartialAck: req.PartialAck, SendAt: req.SendAt,
 	})
 	if err != nil {
 		s.writeCampaignError(w, err)
 		return
 	}
-	s.cfg.Log.Info("campaign approved", "campaign_id", c.ID, "sms", snap.SMS, "email", snap.Email)
+	s.cfg.Log.Info("campaign approved", "campaign_id", c.ID, "sms", snap.SMS, "email", snap.Email,
+		"scheduled", c.Status == campaign.StatusScheduled)
 	s.writeCampaign(w, r, http.StatusOK, c, map[string]any{"snapshot": snap})
+}
+
+// cancelCampaign: POST /api/campaigns/{id}/cancel. Only a scheduled
+// campaign whose sending has not started can be cancelled (409 otherwise).
+func (s *Server) cancelCampaign(w http.ResponseWriter, r *http.Request) {
+	id, ok := campaignID(w, r)
+	if !ok {
+		return
+	}
+	c, err := s.cfg.Campaigns.Cancel(r.Context(), id)
+	if err != nil {
+		s.writeCampaignError(w, err)
+		return
+	}
+	s.cfg.Log.Info("scheduled campaign cancelled", "campaign_id", id)
+	s.writeCampaign(w, r, http.StatusOK, c, nil)
 }

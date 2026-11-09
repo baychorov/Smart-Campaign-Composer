@@ -323,6 +323,7 @@ func JSON(m Meta, results []CaseResult) ([]byte, error) {
 		Extra        int           `json:"extra"`
 		Missing      int           `json:"missing"`
 		Rule         *segment.Rule `json:"rule"`
+		SendAt       *time.Time    `json:"send_at,omitempty"`
 		Summary      string        `json:"summary,omitempty"`
 		Error        string        `json:"error,omitempty"`
 		Unsafe       string        `json:"unsafe,omitempty"`
@@ -353,7 +354,7 @@ func JSON(m Meta, results []CaseResult) ([]byte, error) {
 		for i, r := range cr.Runs {
 			v := cr.Verdicts[i]
 			rj := runJSON{Run: i + 1, Status: r.Status, Correct: v.Correct, Problems: v.Problems,
-				Extra: v.Extra, Missing: v.Missing, Rule: r.Rule, Error: r.Error, Unsafe: r.Unsafe,
+				Extra: v.Extra, Missing: v.Missing, Rule: r.Rule, SendAt: r.SendAt, Error: r.Error, Unsafe: r.Unsafe,
 				Repairs: r.Repairs, Calls: r.Calls, InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
 				Duration: Duration(r.Duration)}
 			if r.Audience != nil {

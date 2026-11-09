@@ -2,8 +2,9 @@
 import { formatCount } from '../lib/labels'
 
 // The fixed bar at the bottom of the draft: channel choice (D-CHANNEL), the
-// explicit acknowledgement of a partial rule (D-PARTIAL) and the approve
-// button with the reasons it is disabled.
+// send time (PLAN step 15a: empty sends now; a time the model read from the
+// brief arrives filled in), the explicit acknowledgement of a partial rule
+// (D-PARTIAL) and the approve button with the reasons it is disabled.
 
 const props = defineProps<{
   smsCount: number
@@ -16,6 +17,8 @@ const props = defineProps<{
 // defineModel: two-way bound values (v-model on the parent).
 const channels = defineModel<{ sms: boolean; email: boolean }>('channels', { required: true })
 const partialAck = defineModel<boolean>('partialAck', { required: true })
+/** A datetime-local value in Turkey time; empty means send now. */
+const sendAt = defineModel<string>('sendAt', { required: true })
 
 const emit = defineEmits<{ approve: [] }>()
 
@@ -38,6 +41,13 @@ const setChannel = (k: 'sms' | 'email', v: boolean) => (channels.value = { ...ch
         </label>
       </fieldset>
 
+      <div class="send-at">
+        <label for="send-at">Gönderim zamanı <span class="muted">(Türkiye saati)</span></label>
+        <input id="send-at" v-model="sendAt" type="datetime-local" data-test="send-at" />
+        <button v-if="sendAt" type="button" class="btn btn-sm" data-test="send-now" @click="sendAt = ''">Şimdi gönder</button>
+        <span v-else class="muted now">boş: hemen gönderilir</span>
+      </div>
+
       <label v-if="partial" class="ack">
         <input v-model="partialAck" type="checkbox" data-test="partial-ack" />
         Uygulanmayan kriterler olmadan devam et
@@ -49,7 +59,7 @@ const setChannel = (k: 'sms' | 'email', v: boolean) => (channels.value = { ...ch
 
       <button type="button" class="btn btn-primary btn-lg" data-test="approve" :disabled="reasons.length > 0 || busy" @click="emit('approve')">
         <span v-if="busy" class="spinner"></span>
-        Onayla ve gönder · {{ formatCount(total()) }} mesaj
+        {{ sendAt ? 'Onayla ve zamanla' : 'Onayla ve gönder' }} · {{ formatCount(total()) }} mesaj
       </button>
     </div>
   </div>
@@ -93,6 +103,32 @@ input[type='checkbox'] {
   width: 16px;
   height: 16px;
   accent-color: var(--accent);
+}
+.send-at {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: var(--text-sm);
+}
+.send-at input {
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+.send-at input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.now {
+  font-size: var(--text-xs);
+}
+.btn-sm {
+  padding: 3px 10px;
+  font-size: var(--text-xs);
 }
 .ack {
   background: var(--warn-soft);

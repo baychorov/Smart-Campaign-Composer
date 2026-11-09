@@ -95,7 +95,15 @@ type SegmentResult struct {
 	// Repairs is how many repair requests were sent.
 	Repairs  int
 	Attempts []Attempt
+	// SendAt is the send time the model read from the brief ("yarın sabah
+	// 10'da gönder"), or nil. It is a suggestion: the marketer confirms or
+	// changes it at approval.
+	SendAt *time.Time
 }
+
+// IssueInvalidSendAt is the warning for a suggested send time that could
+// not be read; the suggestion is dropped.
+const IssueInvalidSendAt = "invalid_send_at"
 
 // Usage sums the tokens of all attempts.
 func (r SegmentResult) Usage() Usage { return sumUsage(r.Attempts) }
@@ -152,11 +160,16 @@ func ExtractSegment(ctx context.Context, c Client, brief string, today time.Time
 			return res, fmt.Errorf("extract segment: %w", err)
 		}
 
-		rule, err := decodeRule(resp.Text)
+		out, err := decodeSegmentOutput(resp.Text)
 		if err == nil {
-			res.Validation = segment.Validate(rule)
+			res.Validation = segment.Validate(out.Rule)
 			if res.Validation.Valid() {
 				res.Issues = nil
+				var ok bool
+				if res.SendAt, ok = parseSendAt(out.SendAt); !ok {
+					res.Validation.Warnings = append(res.Validation.Warnings, segment.Issue{Path: "send_at", Code: IssueInvalidSendAt,
+						Message: fmt.Sprintf("önerilen gönderim zamanı okunamadı (%q); zamanı onay ekranında seçin", *out.SendAt)})
+				}
 				return res, nil
 			}
 			res.Issues = res.Validation.Errors

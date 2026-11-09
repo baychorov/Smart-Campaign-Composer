@@ -58,11 +58,16 @@ export const api = {
   startGeneration: (id: number) =>
     request<{ id: string; events_url: string }>('POST', campaignPath(id) + '/content/generations'),
 
-  approve: (id: number, channels: { sms: boolean; email: boolean }, partialAck: boolean) =>
+  /** sendAt: RFC 3339 time to schedule, or null to send now. */
+  approve: (id: number, channels: { sms: boolean; email: boolean }, partialAck: boolean, sendAt: string | null = null) =>
     request<{ campaign: Campaign; snapshot: { sms: number; email: number } }>('POST', campaignPath(id) + '/approve', {
       channels,
       partial_ack: partialAck,
+      send_at: sendAt,
     }),
+
+  /** Scheduled campaigns only, before sending starts (409 otherwise). */
+  cancel: (id: number) => request<{ campaign: Campaign }>('POST', campaignPath(id) + '/cancel'),
 
   generationEventsUrl: (genId: string) => `/api/content/generations/${encodeURIComponent(genId)}/events`,
   campaignEventsUrl: (id: number) => campaignPath(id) + '/events',

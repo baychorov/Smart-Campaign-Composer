@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api } from '../api/client'
 import type { Issue } from '../api/types'
 import ApprovalBar from '../components/ApprovalBar.vue'
@@ -10,6 +10,7 @@ import { toApiError, useCampaign } from '../composables/useCampaign'
 import { useContentEditor } from '../composables/useContentEditor'
 import { blockingReasons } from '../lib/approval'
 import { STATUS_LABELS } from '../lib/labels'
+import { fromTurkeyInput, toTurkeyInput } from '../lib/schedule'
 
 // One campaign. A draft shows the workspace (audience | messages + approval
 // bar); after approval the same URL shows the live dashboard.
@@ -21,6 +22,12 @@ const editor = useContentEditor(campaign, (c) => (campaign.value = c))
 
 const channels = ref({ sms: true, email: true })
 const partialAck = ref(false)
+/** datetime-local value in Turkey time; filled from the brief's suggestion. */
+const sendAt = ref('')
+// The time limits move with the clock; a minute is precise enough.
+const now = ref(new Date())
+const clock = setInterval(() => (now.value = new Date()), 60_000)
+onUnmounted(() => clearInterval(clock))
 const approving = ref(false)
 const approveIssues = ref<Issue[]>([])
 const approveError = ref<string | null>(null)
@@ -34,6 +41,7 @@ onMounted(async () => {
   const c = campaign.value
   if (!c || c.status !== 'draft') return
   editor.init(c)
+  if (c.send_at) sendAt.value = toTurkeyInput(c.send_at)
   // Decision (PLAN step 11): an "ok" rule starts generation by itself; a
   // partial rule waits until the marketer has read what was left out.
   const empty = !Object.values(c.message).some((v) => v.trim() !== '')
@@ -53,6 +61,8 @@ const reasons = computed(() =>
         genPhase: editor.gen.value.phase,
         dirty: editor.dirty.value,
         busy: savingRule.value || editor.saving.value,
+        sendAt: sendAt.value,
+        now: now.value,
       })
     : [],
 )
@@ -63,7 +73,7 @@ async function approve() {
   approveIssues.value = []
   approveError.value = null
   try {
-    const out = await api.approve(campaign.value.id, channels.value, partialAck.value)
+    const out = await api.approve(campaign.value.id, channels.value, partialAck.value, sendAt.value ? fromTurkeyInput(sendAt.value) : null)
     campaign.value = out.campaign
     window.scrollTo({ top: 0 })
   } catch (e) {
@@ -120,6 +130,7 @@ async function approve() {
         <ApprovalBar
           v-model:channels="channels"
           v-model:partial-ack="partialAck"
+          v-model:send-at="sendAt"
           :sms-count="campaign.audience?.sms ?? 0"
           :email-count="campaign.audience?.email ?? 0"
           :partial="campaign.rule.status === 'partial'"
@@ -129,7 +140,7 @@ async function approve() {
         />
       </template>
 
-      <DashboardPanel v-else :campaign="campaign" />
+      <DashboardPanel v-else :campaign="campaign" @update="(c) => (campaign = c)" @reload="load" />
     </template>
   </main>
 </template>
@@ -165,7 +176,8 @@ async function approve() {
   color: var(--ink-soft);
 }
 .status.sending,
-.status.approved {
+.status.approved,
+.status.scheduled {
   background: var(--info-soft);
   border-color: transparent;
   color: var(--info);

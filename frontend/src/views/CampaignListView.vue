@@ -5,6 +5,7 @@ import { api } from '../api/client'
 import type { Campaign, CampaignListItem, ChannelProgress, ListFilter } from '../api/types'
 import { toApiError } from '../composables/useCampaign'
 import { audienceSentence, formatCount, formatDate, REASON_LABELS, STATUS_LABELS } from '../lib/labels'
+import { formatTurkey } from '../lib/schedule'
 
 // Past campaigns, newest first. A row is collapsed (id, status, date,
 // delivery counts); opening it loads the campaign with GET {id} and shows
@@ -156,6 +157,9 @@ onMounted(() => void load())
           <span class="id num">#{{ it.id }}</span>
           <span class="status" :class="`st-${it.status}`" data-test="status">{{ STATUS_LABELS[it.status] }}</span>
           <span class="date muted">{{ formatDate(it.approved_at ?? it.created_at) }}</span>
+          <span v-if="it.status === 'scheduled' && it.send_at" class="send-at" data-test="row-send-at">
+            gönderim: {{ formatTurkey(it.send_at) }}
+          </span>
           <span class="counts" data-test="counts">
             <span v-for="ch in channelsOf(it)" :key="ch.key" class="count">
               {{ ch.label }} <b class="num">{{ formatCount(ch.c.sent) }}</b><span class="muted num">/{{ formatCount(ch.c.total) }}</span>
@@ -233,6 +237,9 @@ onMounted(() => void load())
             <p class="muted small">
               Oluşturuldu: {{ formatDate(details[it.id]!.created_at) }}
               <template v-if="details[it.id]!.approved_at"> · Onaylandı: {{ formatDate(details[it.id]!.approved_at!) }}</template>
+              <template v-if="it.status !== 'draft' && details[it.id]!.send_at">
+                · Planlanan gönderim: {{ formatTurkey(details[it.id]!.send_at!) }} (Türkiye saati)
+              </template>
             </p>
 
             <p v-if="deleteError" class="note note-bad" role="alert">{{ deleteError }}</p>
@@ -349,6 +356,14 @@ h1 {
 .st-sending {
   background: var(--info-soft);
   color: var(--info);
+}
+.st-scheduled {
+  background: var(--variable-soft);
+  color: var(--variable);
+}
+.send-at {
+  font-size: var(--text-xs);
+  color: var(--variable);
 }
 .st-completed {
   background: var(--ok-soft);

@@ -35,6 +35,9 @@ type ListItem struct {
 	Status     Status     `json:"status"`
 	CreatedAt  time.Time  `json:"created_at"`
 	ApprovedAt *time.Time `json:"approved_at"`
+	// SendAt is the scheduled send time of a scheduled or cancelled
+	// campaign, or the suggestion of a draft.
+	SendAt *time.Time `json:"send_at"`
 	// Channels has the delivery counts of each channel chosen at approval;
 	// empty for a draft.
 	Channels map[string]ChannelProgress `json:"progress"`
@@ -76,7 +79,7 @@ func (s *Service) List(ctx context.Context, filter ListFilter, before int64, lim
 
 	// One extra row tells whether another page exists.
 	rows, err := s.db.Query(ctx, `
-SELECT id, status, created_at, approved_at
+SELECT id, status, created_at, approved_at, scheduled_at
 FROM campaigns
 WHERE `+where+` AND ($1 = 0 OR id < $1)
 ORDER BY id DESC
@@ -86,7 +89,7 @@ LIMIT $2`, before, limit+1)
 	}
 	items, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (ListItem, error) {
 		it := ListItem{Channels: map[string]ChannelProgress{}}
-		err := row.Scan(&it.ID, &it.Status, &it.CreatedAt, &it.ApprovedAt)
+		err := row.Scan(&it.ID, &it.Status, &it.CreatedAt, &it.ApprovedAt, &it.SendAt)
 		return it, err
 	})
 	if err != nil {

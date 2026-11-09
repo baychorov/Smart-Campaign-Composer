@@ -73,6 +73,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/campaigns/{id}/content", s.saveContent)
 	mux.HandleFunc("POST /api/campaigns/{id}/content/generations", s.startGeneration)
 	mux.HandleFunc("POST /api/campaigns/{id}/approve", s.approveCampaign)
+	mux.HandleFunc("POST /api/campaigns/{id}/cancel", s.cancelCampaign)
 	mux.HandleFunc("GET /api/campaigns/{id}/events", s.campaignEvents)
 	mux.HandleFunc("GET /api/content/generations/{id}/events", s.generationEvents)
 }

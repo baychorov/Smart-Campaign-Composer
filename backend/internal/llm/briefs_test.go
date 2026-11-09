@@ -21,6 +21,7 @@ type briefCase struct {
 	wantStatus segment.Status
 	want       segment.Rule // conditions only, compared after normalisation; zero means reply
 	wantWarn   string       // optional warning code
+	sendAt     string       // send_at in the reply and in the result; empty means null
 }
 
 func ok(common []segment.Condition, groups ...segment.Group) segment.Rule {
@@ -111,10 +112,10 @@ func briefCases() []briefCase {
 			wantStatus: segment.StatusUnsupported,
 		},
 		{id: 13, brief: "Son 30 günde alışveriş yapan Bursalılara yarın sabah 10'da sadece SMS ile gönder.",
-			reply: withNotes(partial(ok(conds(city(in, "Bursa"), event(buy, true, 30))),
-				unsupported("yarın sabah 10'da", segment.ReasonScheduling)),
-				"Yalnızca SMS kanalı istendi."),
-			wantStatus: segment.StatusPartial,
+			// The send time goes to send_at (PLAN step 15a), not to unsupported.
+			reply:      withNotes(ok(conds(city(in, "Bursa"), event(buy, true, 30))), "Yalnızca SMS kanalı istendi."),
+			sendAt:     "2026-11-02T10:00:00+03:00",
+			wantStatus: segment.StatusOK,
 			want:       ok(conds(city(in, "Bursa"), event(buy, true, 30)))},
 		{id: 14, brief: "Bana Python'da bir sıralama algoritması yaz.",
 			reply:      noAudience(segment.StatusRejected, unsupported("kampanya kitlesiyle ilgisiz istek", segment.ReasonOffTopic)),
@@ -188,7 +189,7 @@ func TestExtractSegmentBriefSet(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(fmt.Sprintf("brief%02d", tc.id), func(t *testing.T) {
-			fake := NewFake(Text(mustJSON(t, tc.reply)))
+			fake := NewFake(Text(withSendAt(t, mustJSON(t, tc.reply), tc.sendAt)))
 			res, err := ExtractSegment(context.Background(), fake, tc.brief, testToday)
 			if err != nil {
 				t.Fatalf("#%d: %v (issues %v)", tc.id, err, res.Issues)
@@ -205,6 +206,9 @@ func TestExtractSegmentBriefSet(t *testing.T) {
 				want = tc.reply
 			}
 			assertSameAudience(t, got, want)
+			if got := formatSendAt(res.SendAt); got != tc.sendAt {
+				t.Errorf("#%d: send_at %q, want %q", tc.id, got, tc.sendAt)
+			}
 			if tc.wantWarn != "" && !hasCode(res.Validation.Warnings, tc.wantWarn) {
 				t.Errorf("#%d: missing warning %q, got %v", tc.id, tc.wantWarn, res.Validation.Warnings)
 			}
