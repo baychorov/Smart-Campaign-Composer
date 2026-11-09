@@ -30,7 +30,7 @@ Bir adım bitince durumu güncellenir ve kısa bir not düşülür.
 | 14b | Yeni kitle kriterleri | Sayı ("son 90 günde en az 3 kez alışveriş"), kesin tarih aralığı ve sıra ("sepete ekledikten sonra almamış"). Segment şeması, doğrulama, normalizasyon, derleyici, özet, prompt, eval test seti ve arayüz. Tutar, sıralama ve ürün/kategori kapsam dışı (kullanıcı kararı) | R-AUD-1, R-AI-1 | ✅ |
 | 15 | Bonus (opsiyonel) | Zamanlanmış gönderim, A/B, dile göre içerik, CI | Bölüm 9 | ⏳ |
 | 15a | Zamanlanmış gönderim | Kitle onayda hesaplanır ve kuyruğa `next_attempt_at = gönderim zamanı` ile yazılır (`scheduled` durumu). Model brief'teki gönderim zamanını `send_at` olarak önerir; onay çubuğunda tarih-saat alanında gelir ve değiştirilebilir. Zamanı gelene kadar iptal (`cancelled`); iptal ile worker yarışında satırları önce kilitleyen kazanır. Ücretli eval yalnızca #2 ve #13 için | Bölüm 9 | ✅ |
-| 15b | CI pipeline | GitHub Actions: `main`'e push ve PR'da `make lint`, `make test` ve compose ile ayağa kaldırılan sistemde `make smoke`. Secret yok, LLM mock. Yalnızca doküman değişikliklerinde atlanır (D-CI) | Bölüm 9 | 🔄 |
+| 15b | CI pipeline | GitHub Actions: `main`'e push ve PR'da `make lint`, `make test` ve compose ile ayağa kaldırılan sistemde `make smoke`. Secret yok, LLM mock. Yalnızca doküman değişikliklerinde atlanır (D-CI) | Bölüm 9 | ✅ |
 
 **Kaba takvim:**
 
@@ -338,4 +338,5 @@ Puanlama, kuralın seed'de döndürdüğü kullanıcı kümesiyle yapılır (bkz
   - **İlk CI çalıştırmasında bulunan bug:** `test` job'unda `TestApproveConcurrent` 60 sn zaman aşımıyla kırıldı. Sebep: eşzamanlı onaylarda kaybedenler, transaction bağlantısını tutarken `notDraftReason`'ı havuz üzerinden çağırıp ikinci bir bağlantı istiyordu. pgx havuzunun varsayılan boyutu `max(4, CPU)` olduğu için yerelde (16 çekirdek) görünmedi; 2 çekirdekli runner'da havuz kilitlendi. Aynı hata `Cancel`'daki `notScheduledReason`'da da vardı ve üretimde de, az çekirdekli bir sunucuda çift tıklama ve yük bir araya gelince ortaya çıkabilirdi.
     - **Düzeltme:** İki fonksiyon artık `querier` alıyor ve transaction içinden `tx` ile çağrılıyor. Diğer transaction'lar (worker'ın claim'i, seed) içeride yalnızca kendi `tx`'lerini kullanıyor.
     - **Test:** `TestApproveConcurrent` ve yeni `TestCancelConcurrent`, çağıran sayısından küçük (2 bağlantılı) bir havuzla çalışıyor; böylece hata CPU sayısından bağımsız olarak her makinede yakalanır. Düzeltmeden önce ikisi de yerelde CI'daki hatayla birebir kırıldı, sonra 0,5 sn'de geçti. `make lint` ve `make test` geçti.
-  - **Kalan:** Düzeltme push edildikten sonra Actions'ta üç job'un yeşil olduğu görülecek. Bilerek bozma (gofmt'siz satır veya kırık test ile pipeline'ın kırmızıya dönmesi) yapılacak; ardından durum ✅ olacak.
+  - **CI'da doğrulama:** Düzeltme push edildikten sonra üç job da yeşil oldu.
+  - **Bilerek bozma:** gofmt'e uymayan ve her zaman başarısız olan bir test dosyası (`internal/content/ci_break_test.go`) push edildi: `lint` ve `test` kırmızı, `smoke` yeşil oldu (job'lar birbirinden bağımsız). Dosya ardından silindi.
