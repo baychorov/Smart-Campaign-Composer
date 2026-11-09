@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import type { Campaign, Issue, MessageField } from '../api/types'
 import type { ContentEditor } from '../composables/useContentEditor'
 import { renderPreview, splitVariables } from '../lib/text'
@@ -36,12 +36,10 @@ function errorsFor(field: MessageField): Issue[] {
   return validation.value?.errors.filter((e) => e.path === field) ?? []
 }
 
-const SAMPLES = {
-  named: { label: 'Ayşe · İstanbul', values: { first_name: 'Ayşe', city: 'İstanbul' } },
-  empty: { label: 'İsim boş', values: { first_name: '', city: 'İzmir' } },
-}
-const sample = ref<keyof typeof SAMPLES>('named')
-const preview = (t: string) => splitVariables(renderPreview(t, SAMPLES[sample.value].values))
+// The preview fills the variables with one sample customer; the editor
+// above shows the raw {{first_name}}.
+const SAMPLE = { first_name: 'Ayşe', city: 'İstanbul' }
+const preview = (t: string) => splitVariables(renderPreview(t, SAMPLE))
 </script>
 
 <template>
@@ -82,8 +80,6 @@ const preview = (t: string) => splitVariables(renderPreview(t, SAMPLES[sample.va
         </p>
 
         <template v-if="hasMessage || running">
-          <div v-if="gen.log.length" class="event-log mono" aria-label="Akış olayları">{{ gen.log.join(' → ') }}</div>
-
           <div class="msg">
             <div class="msg-head"><i class="swatch" style="background: var(--sms)"></i>SMS</div>
             <MessageFieldView
@@ -98,10 +94,11 @@ const preview = (t: string) => splitVariables(renderPreview(t, SAMPLES[sample.va
               :errors="errorsFor('sms')"
               @update="(v) => editor.edit('sms', v)"
             />
-            <div v-if="!running" class="preview">
+            <div v-if="!running" class="preview sms-preview" data-test="sms-preview">
               <div class="bubble">
                 <template v-for="(p, i) in preview(text.sms)" :key="i"><span :class="{ 'unknown-var': p.variable }">{{ p.text }}</span></template>
               </div>
+              <p class="sms-time">Şimdi</p>
             </div>
           </div>
 
@@ -111,7 +108,7 @@ const preview = (t: string) => splitVariables(renderPreview(t, SAMPLES[sample.va
               v-for="f in (['email_subject', 'email_body'] as const)"
               :key="f"
               :field="f"
-              :label="f === 'email_subject' ? 'Konu' : 'Gövde (düz metin)'"
+              :label="f === 'email_subject' ? 'Konu' : 'Gövde'"
               :value="text[f]"
               :streaming="running"
               :caret="gen.current === f"
@@ -123,41 +120,23 @@ const preview = (t: string) => splitVariables(renderPreview(t, SAMPLES[sample.va
             />
             <div v-if="!running" class="preview">
               <div class="mail">
-                <div class="mail-subject">{{ renderPreview(text.email_subject, SAMPLES[sample].values) }}</div>
-                <div class="mail-body">{{ renderPreview(text.email_body, SAMPLES[sample].values) }}</div>
+                <div class="mail-subject">{{ renderPreview(text.email_subject, SAMPLE) }}</div>
+                <div class="mail-body">{{ renderPreview(text.email_body, SAMPLE) }}</div>
               </div>
             </div>
           </div>
 
-          <div v-if="!running" class="footer">
-            <div class="samples" role="group" aria-label="Önizleme örneği">
-              <span class="muted">Önizleme:</span>
-              <button
-                v-for="(s, k) in SAMPLES"
-                :key="k"
-                type="button"
-                class="seg"
-                :aria-pressed="sample === k"
-                @click="sample = k"
-              >{{ s.label }}</button>
-            </div>
-            <div class="save-row">
+          <div v-if="!running && (dirty || validation?.valid === false || editor.error.value)" class="footer">
+            <div v-if="dirty || validation?.valid === false" class="save-row">
               <template v-if="dirty">
                 <span class="warn-text">Kaydedilmemiş değişiklik var</span>
                 <button type="button" class="btn btn-primary" :disabled="editor.saving.value" @click="editor.save()">
                   <span v-if="editor.saving.value" class="spinner"></span>Kaydet ve doğrula
                 </button>
               </template>
-              <span v-else-if="validation?.valid" class="ok-text">
-                Backend doğruladı: değişkenler kitledeki en uzun değerlerle doldurulduğunda da sınırların içinde.
-              </span>
-              <span v-else-if="validation" class="bad-text">Mesajda düzeltilmesi gereken hata var; ilgili alanın altındaki açıklamaya bak.</span>
+              <span v-else class="bad-text">Mesajda düzeltilmesi gereken hata var; ilgili alanın altındaki açıklamaya bak.</span>
             </div>
             <p v-if="editor.error.value" class="bad-text" role="alert">{{ editor.error.value }}</p>
-            <p class="muted vars">
-              Değişkenler: <span class="code">{{ '{' + '{first_name}' + '}' }}</span>
-              <span class="code">{{ '{' + '{city}' + '}' }}</span>. İsim boşsa "Değerli Müşterimiz" yazılır.
-            </p>
           </div>
         </template>
       </template>
@@ -166,6 +145,10 @@ const preview = (t: string) => splitVariables(renderPreview(t, SAMPLES[sample.va
 </template>
 
 <style scoped>
+/* The SMS and email boxes need clear air between them. */
+.card-body {
+  gap: 1.75rem;
+}
 .spacer {
   flex: 1;
 }
@@ -173,16 +156,7 @@ const preview = (t: string) => splitVariables(renderPreview(t, SAMPLES[sample.va
   margin: 0;
   color: var(--muted);
   text-align: center;
-  padding: 24px 8px;
-}
-.event-log {
-  font-size: 11.5px;
-  color: var(--muted);
-  background: var(--surface-muted);
-  border-radius: var(--radius-sm);
-  padding: 5px 10px;
-  overflow-x: auto;
-  white-space: nowrap;
+  padding: 1.5rem 0.5rem;
 }
 .msg {
   border: 1px solid var(--line);
@@ -192,47 +166,86 @@ const preview = (t: string) => splitVariables(renderPreview(t, SAMPLES[sample.va
 .msg-head {
   display: flex;
   align-items: center;
-  padding: 8px 14px;
+  padding: 0.625rem 1rem;
   background: var(--surface-muted);
   border-bottom: 1px solid var(--line);
-  font-size: var(--text-xs);
-  font-weight: 600;
+  font-size: var(--text-md);
+  font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--ink);
+}
+.msg-head .swatch {
+  width: 0.625rem;
+  height: 0.625rem;
+  margin-right: 0.5rem;
 }
 .preview {
-  padding: 12px 14px;
+  padding: 0.75rem 0.875rem;
   border-top: 1px dashed var(--line);
   background: color-mix(in srgb, var(--surface-muted) 50%, var(--surface));
 }
+/* The SMS preview looks like a received message on a phone: a grey
+   bubble with a tail at the bottom left. The tail is two pseudo-elements;
+   the second one is painted in the preview's background colour. */
+.sms-preview {
+  background: var(--surface);
+  padding: 1rem 1.25rem 1rem 1.5rem;
+}
 .bubble {
-  max-width: 88%;
-  background: var(--sms);
-  color: var(--accent-ink);
-  border-radius: 16px 16px 16px 4px;
-  padding: 9px 13px;
-  font-size: var(--text-sm);
+  position: relative;
+  width: fit-content;
+  max-width: 80%;
+  background: var(--bubble);
+  color: var(--ink);
+  border-radius: 1.125rem;
+  padding: 0.625rem 0.875rem;
+  font-size: var(--text-md);
+  line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+.bubble::before,
+.bubble::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  height: 1.25rem;
+}
+.bubble::before {
+  left: -0.4375rem;
+  width: 1.25rem;
+  background: var(--bubble);
+  border-bottom-right-radius: 1rem 0.875rem;
+}
+.bubble::after {
+  left: -0.625rem;
+  width: 0.625rem;
+  background: var(--surface);
+  border-bottom-right-radius: 0.625rem;
+}
+.sms-time {
+  margin: 0.375rem 0 0 0.25rem;
+  font-size: var(--text-xs);
+  color: var(--muted);
 }
 .unknown-var {
   background: var(--bad-soft);
   color: var(--bad);
-  border-radius: 3px;
-  padding: 0 2px;
+  border-radius: 0.1875rem;
+  padding: 0 0.125rem;
 }
 .mail {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  padding: 12px 14px;
+  padding: 0.75rem 0.875rem;
   font-size: var(--text-sm);
 }
 .mail-subject {
   font-weight: 600;
-  padding-bottom: 8px;
-  margin-bottom: 8px;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
   border-bottom: 1px solid var(--line);
   overflow-wrap: anywhere;
 }
@@ -244,48 +257,21 @@ const preview = (t: string) => splitVariables(renderPreview(t, SAMPLES[sample.va
 .footer {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-.samples {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--text-xs);
-}
-.seg {
-  border: 1px solid var(--line);
-  background: var(--surface);
-  border-radius: 999px;
-  padding: 2px 10px;
-  font-size: var(--text-xs);
-  color: var(--ink-soft);
-}
-.seg[aria-pressed='true'] {
-  background: var(--accent-soft);
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-  color: var(--accent);
+  gap: 0.625rem;
 }
 .save-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 0.625rem;
   font-size: var(--text-sm);
 }
 .warn-text {
   color: var(--warn);
 }
-.ok-text {
-  color: var(--ok);
-}
 .bad-text {
   color: var(--bad);
   margin: 0;
   font-size: var(--text-sm);
-}
-.vars {
-  margin: 0;
-  font-size: var(--text-xs);
 }
 </style>

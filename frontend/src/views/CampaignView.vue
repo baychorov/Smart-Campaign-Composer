@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { api } from '../api/client'
 import type { Issue } from '../api/types'
 import ApprovalBar from '../components/ApprovalBar.vue'
@@ -16,6 +17,16 @@ import { fromTurkeyInput, toTurkeyInput } from '../lib/schedule'
 // bar); after approval the same URL shows the live dashboard.
 
 const props = defineProps<{ id: number }>()
+const router = useRouter()
+
+// "← Kampanyalar": coming from the list, go back in history so the list
+// shows the same filter, open row and scroll position (it is kept alive in
+// App.vue). Coming from the brief form or a direct link, open the list.
+function backToList() {
+  const back = router.options.history.state.back // the previous page's path, kept by vue-router
+  if (typeof back === 'string' && /^\/campaigns(\?|$)/.test(back)) router.back()
+  else void router.push({ name: 'campaigns' })
+}
 
 const { campaign, warnings, error, loading, savingRule, load, updateRule } = useCampaign(props.id)
 const editor = useContentEditor(campaign, (c) => (campaign.value = c))
@@ -97,10 +108,15 @@ async function approve() {
     </div>
 
     <template v-else>
+      <a href="/campaigns" class="back" data-test="back" @click.prevent="backToList">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" /></svg>
+        Kampanyalar
+      </a>
+
       <header class="title-row">
         <div class="title-main">
           <div class="eyebrow">
-            <span>Kampanya #{{ campaign.id }}</span>
+            <span class="campaign-no">Kampanya {{ campaign.id }}</span>
             <span class="status" :class="campaign.status" data-test="status">{{ STATUS_LABELS[campaign.status] }}</span>
           </div>
           <p class="brief">“{{ campaign.brief }}”</p>
@@ -147,30 +163,56 @@ async function approve() {
 
 <style scoped>
 .page {
-  padding-top: 24px;
-  padding-bottom: 40px;
+  padding-top: 1.5rem;
+  padding-bottom: 2.5rem;
 }
 .page.has-bar {
-  padding-bottom: 140px;
+  padding-bottom: 8.75rem;
 }
 .loading {
-  padding: 40px 0;
+  padding: 2.5rem 0;
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0 0 0.75rem -0.5rem;
+  padding: 0.25rem 0.625rem 0.25rem 0.375rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+.back:hover {
+  background: var(--surface-muted);
+  color: var(--accent);
+}
+.back svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .title-row {
-  margin-bottom: 18px;
+  margin-bottom: 1.75rem;
 }
 .eyebrow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 1rem;
   font-size: var(--text-sm);
   color: var(--muted);
 }
 .status {
   font-size: var(--text-xs);
   font-weight: 500;
-  border-radius: 999px;
-  padding: 2px 10px;
+  border-radius: 62.4375rem;
+  padding: 0.125rem 0.625rem;
   background: var(--surface-muted);
   border: 1px solid var(--line);
   color: var(--ink-soft);
@@ -187,8 +229,12 @@ async function approve() {
   border-color: transparent;
   color: var(--ok);
 }
+.campaign-no {
+  font-weight: 600;
+  color: var(--ink-soft);
+}
 .brief {
-  margin: 6px 0 0;
+  margin: 0.625rem 0 0;
   font-size: var(--text-lg);
   color: var(--ink);
   max-width: 90ch;
@@ -196,7 +242,7 @@ async function approve() {
 .workspace {
   display: grid;
   grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-  gap: 18px;
+  gap: 1.5rem;
   align-items: start;
 }
 @media (max-width: 960px) {
@@ -205,6 +251,6 @@ async function approve() {
   }
 }
 .approve-error {
-  margin-bottom: 16px;
+  margin-bottom: 1rem;
 }
 </style>

@@ -42,11 +42,32 @@ describe('ApprovalBar', () => {
     expect(now.get('[data-test="approve"]').text()).toContain('Onayla ve gönder')
     expect(now.find('[data-test="send-now"]').exists()).toBe(false)
 
-    const later = mountBar({ sendAt: '2026-11-02T10:00' })
-    expect((later.get('[data-test="send-at"]').element as HTMLInputElement).value).toBe('2026-11-02T10:00')
+    const later = mountBar({ sendAt: '2026-11-02T18:30' })
+    expect((later.get('[data-test="send-date"]').element as HTMLInputElement).value).toBe('2026-11-02')
+    expect((later.get('[data-test="send-hour"]').element as HTMLSelectElement).value).toBe('18')
+    expect((later.get('[data-test="send-minute"]').element as HTMLSelectElement).value).toBe('30')
+    expect(later.text()).not.toContain('Türkiye saati')
     expect(later.get('[data-test="approve"]').text()).toContain('Onayla ve zamanla')
     await later.get('[data-test="send-now"]').trigger('click')
     expect(later.emitted('update:sendAt')![0]).toEqual([''])
+  })
+
+  it('picks the time in 24-hour parts: a new date starts at 10:00, no date sends now', async () => {
+    const now = mountBar()
+    expect(now.get('[data-test="send-hour"]').attributes('disabled')).toBeDefined()
+    await now.get('[data-test="send-date"]').setValue('2026-11-03')
+    expect(now.emitted('update:sendAt')![0]).toEqual(['2026-11-03T10:00'])
+
+    const later = mountBar({ sendAt: '2026-11-02T10:00' })
+    const hours = later.get('[data-test="send-hour"]').findAll('option').map((o) => o.text())
+    expect(hours).toHaveLength(24)
+    expect(hours.at(-1)).toBe('23') // no AM/PM
+    await later.get('[data-test="send-hour"]').setValue('21')
+    expect(later.emitted('update:sendAt')![0]).toEqual(['2026-11-02T21:00'])
+    await later.get('[data-test="send-minute"]').setValue('45')
+    expect(later.emitted('update:sendAt')![1]).toEqual(['2026-11-02T21:45']) // keeps the new hour
+    await later.get('[data-test="send-date"]').setValue('')
+    expect(later.emitted('update:sendAt')![2]).toEqual([''])
   })
 
   it('reports channel changes and the click', async () => {

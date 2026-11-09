@@ -47,14 +47,11 @@ async function submit() {
     <form class="brief-form card" @submit.prevent="submit">
       <div class="intro">
         <h1>Yeni kampanya</h1>
-        <p class="muted">
-          Kime ne göndermek istediğini yaz. Claude bir hedef kitle kuralı ve SMS ile email taslağı önerir; göndermeden önce
-          hepsini görüp düzeltebilirsin.
-        </p>
+        <p class="muted">Oluşturmak istediğiniz kampanyayı açıklayın. Göndermeden önce düzenleyebilirsiniz.</p>
       </div>
 
-      <label for="brief" class="label">Brief</label>
-      <textarea id="brief" v-model="brief" rows="5" :disabled="submitting" maxlength="2000"></textarea>
+      <!-- No visible label: the heading says what goes here; screen readers get aria-label. -->
+      <textarea id="brief" v-model="brief" rows="5" aria-label="Kampanya açıklaması" :disabled="submitting" maxlength="2000"></textarea>
 
       <div class="examples" aria-label="Örnek brief'ler">
         <span class="muted">Örnekler:</span>
@@ -67,7 +64,7 @@ async function submit() {
 
       <div class="actions">
         <button type="submit" class="btn btn-primary btn-lg" :disabled="submitting || !brief.trim()">Kitleyi çıkar</button>
-        <span v-if="submitting" class="muted"><span class="spinner"></span> Claude brief'i kurala çeviriyor, birkaç saniye sürebilir…</span>
+        <span v-if="submitting" class="muted" data-test="preparing"><span class="spinner"></span> Hazırlanıyor…</span>
       </div>
     </form>
   </main>
@@ -75,54 +72,48 @@ async function submit() {
 
 <style scoped>
 .brief-form {
-  max-width: 760px;
-  margin: 48px auto;
-  padding: 28px 32px;
+  max-width: 47.5rem;
+  margin: 3rem auto;
+  padding: 1.75rem 2rem;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 0.875rem;
 }
 .intro h1 {
-  margin: 0 0 6px;
-  font-size: 24px;
+  margin: 0 0 0.375rem;
+  font-size: 1.5rem;
   font-weight: 600;
   letter-spacing: -0.015em;
 }
 .intro p {
   margin: 0;
-  max-width: 62ch;
-}
-.label {
-  font-weight: 500;
-  font-size: var(--text-sm);
-  color: var(--ink-soft);
 }
 textarea {
   width: 100%;
-  border: 1px solid var(--line-strong);
+  border: 1.5px solid var(--line-input);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
+  padding: 0.75rem 0.875rem;
   background: var(--surface);
-  font-size: 15px;
+  font-size: 0.9375rem;
   resize: vertical;
 }
 textarea:focus {
   border-color: var(--accent);
   outline: none;
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: 0 0 0 0.1875rem var(--accent-soft);
 }
 .examples {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   font-size: var(--text-sm);
 }
 .chip {
   border: 1px solid var(--line);
   background: var(--surface-muted);
-  border-radius: 999px;
-  padding: 3px 12px;
+  border-radius: 62.4375rem;
+  padding: 0.1875rem 0.75rem;
   font-size: var(--text-sm);
   color: var(--ink-soft);
 }
@@ -134,12 +125,12 @@ textarea:focus {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 0.75rem;
 }
 @media (max-width: 560px) {
   .brief-form {
-    margin: 20px auto;
-    padding: 20px;
+    margin: 1.25rem auto;
+    padding: 1.25rem;
   }
 }
 </style>

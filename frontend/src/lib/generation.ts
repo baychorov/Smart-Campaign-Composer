@@ -16,14 +16,12 @@ export interface GenState {
   stats: Partial<Record<MessageField, FieldStats>>
   failure: { code: string; message: string } | null
   repairs: number
-  /** Compressed event names for the small event log line. */
-  log: string[]
 }
 
 export const emptyMessage = (): Message => ({ sms: '', email_subject: '', email_body: '' })
 
 export function initialGen(): GenState {
-  return { phase: 'idle', text: emptyMessage(), current: null, issues: [], stats: {}, failure: null, repairs: 0, log: [] }
+  return { phase: 'idle', text: emptyMessage(), current: null, issues: [], stats: {}, failure: null, repairs: 0 }
 }
 
 const DELTA_FIELDS: Record<string, MessageField> = {
@@ -36,37 +34,26 @@ const DELTA_FIELDS: Record<string, MessageField> = {
 export const TERMINAL_EVENTS = ['validated', 'invalid', 'failed']
 export const GENERATION_EVENTS = ['started', 'reset', ...Object.keys(DELTA_FIELDS), ...TERMINAL_EVENTS]
 
-function logEvent(log: string[], name: string): string[] {
-  const last = log[log.length - 1]
-  const m = last?.match(/^(\S+) ×(\d+)$/)
-  if (name.endsWith('.delta')) {
-    if (m && m[1] === name) return [...log.slice(0, -1), `${name} ×${Number(m[2]) + 1}`]
-    if (last === name) return [...log.slice(0, -1), `${name} ×2`]
-  }
-  return [...log, name]
-}
-
 export function applyEvent(s: GenState, name: string, data: unknown): GenState {
-  const log = logEvent(s.log, name)
   const field = DELTA_FIELDS[name]
   if (field) {
     const text = (data as { text?: string }).text ?? ''
-    return { ...s, log, phase: 'streaming', current: field, text: { ...s.text, [field]: s.text[field] + text } }
+    return { ...s, phase: 'streaming', current: field, text: { ...s.text, [field]: s.text[field] + text } }
   }
   switch (name) {
     case 'started':
-      return { ...s, log, phase: 'preparing' }
+      return { ...s, phase: 'preparing' }
     case 'reset':
       // A repair attempt starts over: the streamed candidate was invalid.
-      return { ...s, log, phase: 'preparing', current: null, text: emptyMessage(), repairs: s.repairs + 1 }
+      return { ...s, phase: 'preparing', current: null, text: emptyMessage(), repairs: s.repairs + 1 }
     case 'validated': {
       const d = data as { message: Message; stats: GenState['stats'] }
-      return { ...s, log, phase: 'validated', current: null, text: d.message, stats: d.stats ?? {}, issues: [] }
+      return { ...s, phase: 'validated', current: null, text: d.message, stats: d.stats ?? {}, issues: [] }
     }
     case 'invalid':
-      return { ...s, log, phase: 'invalid', current: null, issues: (data as { issues?: Issue[] }).issues ?? [] }
+      return { ...s, phase: 'invalid', current: null, issues: (data as { issues?: Issue[] }).issues ?? [] }
     case 'failed':
-      return { ...s, log, phase: 'failed', current: null, failure: data as GenState['failure'] }
+      return { ...s, phase: 'failed', current: null, failure: data as GenState['failure'] }
     default:
       return s
   }

@@ -60,16 +60,4 @@ describe('generation events', () => {
     expect(s.phase).toBe('failed')
     expect(s.failure).toEqual({ code: 'refusal', message: 'Reddetti.' })
   })
-
-  it('compresses runs of deltas in the event log', () => {
-    const s = run([
-      ['started', {}],
-      ['sms.delta', { text: 'a' }],
-      ['sms.delta', { text: 'b' }],
-      ['sms.delta', { text: 'c' }],
-      ['email.body.delta', { text: 'd' }],
-      ['validated', { message: { sms: 'abc', email_subject: '', email_body: 'd' }, stats: {} }],
-    ])
-    expect(s.log).toEqual(['started', 'sms.delta ×3', 'email.body.delta', 'validated'])
-  })
 })

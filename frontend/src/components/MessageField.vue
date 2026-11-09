@@ -22,10 +22,11 @@ const emit = defineEmits<{ update: [value: string] }>()
 
 const limit = computed(() => LIMITS[props.field])
 const count = computed(() => runes(props.value.trim()))
-/** Worst case from the backend: variables filled with the audience's longest values. */
+// The counter shows the typed length only (user decision, PLAN step 15c).
+// The backend's worst case (variables filled with the audience's longest
+// values) still turns it red and blocks approval, with its own message.
 const worst = computed(() => (props.stats && !props.statsStale ? props.stats.worst_case_runes : null))
 const over = computed(() => count.value > limit.value || (worst.value !== null && worst.value > limit.value))
-const fill = computed(() => Math.min(100, ((worst.value ?? count.value) / limit.value) * 100))
 const inputId = computed(() => `msg-${props.field}`)
 </script>
 
@@ -34,7 +35,7 @@ const inputId = computed(() => `msg-${props.field}`)
     <div class="field-head">
       <label :for="inputId">{{ label }}</label>
       <span class="counter num" :class="{ over }" :data-test="`counter-${field}`">
-        {{ count }}<template v-if="worst !== null && worst !== stats?.runes"> · en kötü durum {{ worst }}</template> / {{ limit }}
+        {{ count }} / {{ limit }}
       </span>
     </div>
 
@@ -58,8 +59,6 @@ const inputId = computed(() => `msg-${props.field}`)
       @input="emit('update', ($event.target as HTMLTextAreaElement).value)"
     ></textarea>
 
-    <div class="meter" aria-hidden="true"><i :class="{ over }" :style="{ width: fill + '%' }"></i></div>
-    <p v-if="statsStale && !streaming" class="hint">En kötü durum uzunluğu kaydedince hesaplanır.</p>
     <ul v-if="errors.length" class="errors">
       <li v-for="(e, i) in errors" :key="i">{{ e.message }}</li>
     </ul>
@@ -70,8 +69,8 @@ const inputId = computed(() => `msg-${props.field}`)
 .field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
+  gap: 0.375rem;
+  padding: 0.75rem 0.875rem;
 }
 .field + .field {
   border-top: 1px solid var(--line);
@@ -80,7 +79,7 @@ const inputId = computed(() => `msg-${props.field}`)
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 0.375rem;
   font-size: var(--text-xs);
   color: var(--muted);
 }
@@ -102,7 +101,7 @@ input,
   width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
+  padding: 0.5rem 0.625rem;
   background: var(--surface-muted);
   font-size: var(--text-md);
   line-height: 1.55;
@@ -113,7 +112,7 @@ input:focus {
   outline: none;
   border-color: var(--accent);
   background: var(--surface);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: 0 0 0 0.1875rem var(--accent-soft);
 }
 .stream {
   white-space: pre-wrap;
@@ -126,7 +125,7 @@ input:focus {
 }
 .caret {
   display: inline-block;
-  width: 7px;
+  width: 0.4375rem;
   height: 1.05em;
   margin-left: 1px;
   background: var(--accent);
@@ -138,29 +137,9 @@ input:focus {
     opacity: 0.2;
   }
 }
-.meter {
-  height: 3px;
-  background: var(--line);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.meter i {
-  display: block;
-  height: 100%;
-  background: var(--ok);
-  transition: width 0.2s;
-}
-.meter i.over {
-  background: var(--bad);
-}
-.hint {
-  margin: 0;
-  font-size: var(--text-xs);
-  color: var(--muted);
-}
 .errors {
   margin: 0;
-  padding-left: 18px;
+  padding-left: 1.125rem;
   font-size: var(--text-sm);
   color: var(--bad);
 }

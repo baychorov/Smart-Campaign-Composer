@@ -53,7 +53,7 @@ const last = computed(() => points.value[points.value.length - 1])
 .label {
   fill: var(--muted);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 10px; /* SVG user units: the viewBox scales it with the chart */
 }
 .area {
   fill: var(--accent-soft);

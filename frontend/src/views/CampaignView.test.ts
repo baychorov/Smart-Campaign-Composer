@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory, createRouter, createWebHistory } from 'vue-router'
 import type { Campaign, Progress } from '../api/types'
 import { FakeEventSource } from '../test/fakeEventSource'
 import { fakeFetch } from '../test/fakeFetch'
@@ -9,7 +9,12 @@ import CampaignView from './CampaignView.vue'
 
 // The page end to end against a scripted API: fetch and EventSource are fakes.
 
-const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', name: 'new', component: {} }] })
+const routes = [
+  { path: '/', name: 'new', component: {} },
+  { path: '/campaigns', name: 'campaigns', component: {} },
+  { path: '/campaigns/:id', name: 'campaign', component: {} },
+]
+const router = createRouter({ history: createMemoryHistory(), routes })
 
 beforeEach(() => {
   sessionStorage.clear()
@@ -134,9 +139,13 @@ describe('CampaignView', () => {
     const w = mountView()
     await flushPromises()
 
-    const input = w.get('[data-test="send-at"]')
-    expect((input.element as HTMLInputElement).value).toBe('2026-11-02T10:00') // Turkey time
-    await input.setValue('2026-11-03T09:30') // the marketer changes it on the approval screen
+    // Turkey time, filled from the suggestion
+    expect((w.get('[data-test="send-date"]').element as HTMLInputElement).value).toBe('2026-11-02')
+    expect((w.get('[data-test="send-hour"]').element as HTMLSelectElement).value).toBe('10')
+    // the marketer changes it on the approval screen
+    await w.get('[data-test="send-date"]').setValue('2026-11-03')
+    await w.get('[data-test="send-hour"]').setValue('09')
+    await w.get('[data-test="send-minute"]').setValue('30')
     await w.get('[data-test="approve"]').trigger('click')
     await flushPromises()
 
@@ -181,5 +190,55 @@ describe('CampaignView', () => {
     await flushPromises()
 
     expect(w.get('[data-test="status"]').text()).toBe('Gönderiliyor')
+  })
+
+  it('shows "Kampanya 7" and goes back to the list it came from, or opens the list', async () => {
+    fakeFetch({ 'GET /api/campaigns/7': () => ({ json: { campaign: makeCampaign({ message: goodMessage }) } }) })
+
+    // Came from the list with a filter: back in history, so the list keeps its state.
+    const web = createRouter({ history: createWebHistory(), routes })
+    await web.push('/campaigns?filtre=taslak')
+    await web.push('/campaigns/7')
+    const w = mount(CampaignView, { props: { id: 7 }, global: { plugins: [web] } })
+    await flushPromises()
+    expect(w.text()).toContain('Kampanya 7')
+    expect(w.text()).not.toContain('#7')
+    const back = vi.spyOn(web, 'back')
+    await w.get('[data-test="back"]').trigger('click')
+    expect(back).toHaveBeenCalledOnce()
+
+    // Opened from the brief form (or a link): the list opens.
+    const direct = createRouter({ history: createMemoryHistory(), routes })
+    await direct.push('/campaigns/7')
+    const push = vi.spyOn(direct, 'push')
+    const d = mount(CampaignView, { props: { id: 7 }, global: { plugins: [direct] } })
+    await flushPromises()
+    await d.get('[data-test="back"]').trigger('click')
+    expect(push).toHaveBeenCalledWith({ name: 'campaigns' })
+  })
+
+  it('shows the messages for the marketer: plain counters, an SMS bubble, no developer notes', async () => {
+    const draft = makeCampaign({ message: goodMessage, content_validation: validValidation })
+    fakeFetch({ 'GET /api/campaigns/7': () => ({ json: { campaign: draft } }) })
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.get('[data-test="counter-sms"]').text()).toBe('46 / 160') // typed length of the SMS, not the worst case
+    expect(w.text()).not.toContain('en kötü durum')
+    expect(w.find('.meter').exists()).toBe(false)
+    expect(w.get('[data-test="sms-preview"] .bubble').text()).toBe('Merhaba Ayşe, sepetin seni bekliyor!')
+    expect(w.get('label[for="msg-email_body"]').text()).toBe('Gövde')
+    expect(w.text()).not.toContain('Backend doğruladı')
+    expect(w.text()).not.toContain('Değişkenler:')
+    expect(w.text()).not.toContain('İsim boş')
+  })
+
+  it('still turns the counter red when the worst case is over the limit', async () => {
+    const stats = { ...validValidation.stats, sms: { runes: 150, worst_case_runes: 165, limit: 160 } }
+    const draft = makeCampaign({ message: goodMessage, content_validation: { ...validValidation, valid: false, stats } })
+    fakeFetch({ 'GET /api/campaigns/7': () => ({ json: { campaign: draft } }) })
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-test="counter-sms"]').classes()).toContain('over')
   })
 })

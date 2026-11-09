@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { onActivated, onMounted, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '../api/client'
 import type { Campaign, CampaignListItem, ChannelProgress, ListFilter } from '../api/types'
 import { toApiError } from '../composables/useCampaign'
@@ -21,7 +21,15 @@ const CHANNELS = [
   ['email', 'Email'],
 ] as const
 
-const filter = ref<ListFilter>('all')
+// The filter is in the URL (?filtre=taslak), so a reload or "back" from a
+// campaign shows the same list. "Tümü" has no query.
+const FILTER_QUERY: Record<ListFilter, string | undefined> = { all: undefined, draft: 'taslak', sent: 'gonderilen' }
+const route = useRoute()
+const router = useRouter()
+const filterFromQuery = (): ListFilter =>
+  (Object.keys(FILTER_QUERY) as ListFilter[]).find((f) => FILTER_QUERY[f] === route.query.filtre) ?? 'all'
+
+const filter = ref<ListFilter>(filterFromQuery())
 const items = ref<CampaignListItem[]>([])
 const nextBefore = ref<number | null>(null)
 const loading = ref(false)
@@ -37,6 +45,9 @@ const deleteError = ref<string | null>(null)
 // A request token: a slow page of an old filter must not land in a new one.
 let listToken = 0
 
+// Pages loaded so far; a refresh on return only reloads a single page.
+let pages = 0
+
 async function load(more = false) {
   const token = ++listToken
   loading.value = true
@@ -46,6 +57,7 @@ async function load(more = false) {
     if (token !== listToken) return
     items.value = more ? [...items.value, ...page.campaigns] : page.campaigns
     nextBefore.value = page.next_before
+    pages = more ? pages + 1 : 1
   } catch (e) {
     if (token === listToken) error.value = toApiError(e).message
   } finally {
@@ -55,10 +67,24 @@ async function load(more = false) {
 
 function setFilter(f: ListFilter) {
   if (f === filter.value) return
-  filter.value = f
-  openId.value = null
-  void load()
+  const q = FILTER_QUERY[f]
+  void router.replace({ query: q ? { filtre: q } : {} })
 }
+
+// The URL drives the filter: a button above, the menu's "Kampanyalar" link
+// (no query) or the browser's back/forward. While a campaign is open the
+// list is kept alive but not on screen; its route is not the list's then.
+watch(
+  () => route.query.filtre,
+  () => {
+    if (route.name !== 'campaigns') return
+    const f = filterFromQuery()
+    if (f === filter.value) return
+    filter.value = f
+    openId.value = null
+    void load()
+  },
+)
 
 async function toggle(id: number) {
   confirmingDelete.value = false
@@ -115,6 +141,24 @@ const chosenChannels = (c: Campaign) =>
   [c.channels.sms && 'SMS', c.channels.email && 'Email'].filter(Boolean).join(' + ') || '—'
 
 onMounted(() => void load())
+
+// Back from a campaign (App.vue keeps this page alive): the same rows, open
+// row and scroll position, with fresh statuses and counts. A list that was
+// paged further is left as it is so the scroll position stays valid.
+let activated = false
+onActivated(() => {
+  if (!activated) {
+    activated = true // the first activation is the mount itself
+    return
+  }
+  if (pages <= 1) void load()
+  // Other cached details may be stale; the open row's stays on screen
+  // until its fresh copy arrives.
+  const id = openId.value
+  const shown = id !== null ? details.value[id] : undefined
+  details.value = id !== null && shown ? { [id]: shown } : {}
+  if (id !== null) void loadDetail(id)
+})
 </script>
 
 <template>
@@ -144,6 +188,14 @@ onMounted(() => void load())
       <RouterLink v-if="filter === 'all'" :to="{ name: 'new' }" class="btn btn-primary">Yeni kampanya</RouterLink>
     </div>
 
+    <div v-if="items.length" class="cols" aria-hidden="true">
+      <span>No</span>
+      <span>Durum</span>
+      <span>Tarih</span>
+      <span>Gönderim</span>
+      <span class="right">Kanallar</span>
+    </div>
+
     <ul class="list">
       <li v-for="it in items" :key="it.id" class="card row" :class="{ open: openId === it.id }" :data-test="`row-${it.id}`">
         <button
@@ -154,15 +206,15 @@ onMounted(() => void load())
           data-test="toggle"
           @click="toggle(it.id)"
         >
-          <span class="id num">#{{ it.id }}</span>
+          <span class="id num">{{ it.id }}</span>
           <span class="status" :class="`st-${it.status}`" data-test="status">{{ STATUS_LABELS[it.status] }}</span>
           <span class="date muted">{{ formatDate(it.approved_at ?? it.created_at) }}</span>
-          <span v-if="it.status === 'scheduled' && it.send_at" class="send-at" data-test="row-send-at">
-            gönderim: {{ formatTurkey(it.send_at) }}
+          <span class="send-cell">
+            <span v-if="it.status === 'scheduled' && it.send_at" class="send-at" data-test="row-send-at">{{ formatTurkey(it.send_at) }}</span>
           </span>
           <span class="counts" data-test="counts">
             <span v-for="ch in channelsOf(it)" :key="ch.key" class="count">
-              {{ ch.label }} <b class="num">{{ formatCount(ch.c.sent) }}</b><span class="muted num">/{{ formatCount(ch.c.total) }}</span>
+              <span class="ch">{{ ch.label }}</span> <b class="num">{{ formatCount(ch.c.sent) }}</b><span class="muted num">/{{ formatCount(ch.c.total) }}</span>
               <span v-if="ch.c.failed" class="failed num">· {{ formatCount(ch.c.failed) }} başarısız</span>
             </span>
           </span>
@@ -273,17 +325,17 @@ onMounted(() => void load())
 
 <style scoped>
 .page {
-  max-width: 920px;
-  padding-top: 28px;
-  padding-bottom: 48px;
+  max-width: 64rem;
+  padding-top: 1.75rem;
+  padding-bottom: 3rem;
 }
 .head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 h1 {
   margin: 0;
@@ -294,15 +346,15 @@ h1 {
   background: var(--surface-muted);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  padding: 2px;
+  padding: 0.125rem;
 }
 .filter {
   border: 0;
   background: transparent;
   color: var(--ink-soft);
   font-size: var(--text-sm);
-  padding: 5px 12px;
-  border-radius: 4px;
+  padding: 0.3125rem 0.75rem;
+  border-radius: 0.25rem;
 }
 .filter.active {
   background: var(--surface);
@@ -316,20 +368,34 @@ h1 {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .empty {
-  padding: 28px;
+  padding: 1.75rem;
   text-align: center;
 }
+/* Rows are a grid with fixed columns, so ids, statuses, dates and counts
+   line up from row to row under the grey column headings. */
+.cols,
 .row-head {
-  position: relative;
-  width: 100%;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 3.5rem 8rem 9.5rem 10rem minmax(0, 1fr) 1rem;
   align-items: center;
-  gap: 6px 14px;
-  padding: 12px 40px 12px 16px;
+  column-gap: 1.25rem;
+}
+.cols {
+  padding: 0 1.25rem 0.5rem;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.cols .right {
+  text-align: right;
+}
+.row-head {
+  width: 100%;
+  padding: 0.875rem 1.25rem;
   border: 0;
   background: transparent;
   text-align: left;
@@ -341,14 +407,14 @@ h1 {
   border-radius: var(--radius-lg);
 }
 .id {
-  font-weight: 600;
-  min-width: 3ch;
+  font-weight: 700;
 }
 .status {
+  justify-self: start;
   font-size: var(--text-xs);
   font-weight: 500;
-  border-radius: 999px;
-  padding: 2px 9px;
+  border-radius: 62.4375rem;
+  padding: 0.125rem 0.5625rem;
   background: var(--surface-muted);
   color: var(--ink-soft);
 }
@@ -362,29 +428,36 @@ h1 {
   color: var(--variable);
 }
 .send-at {
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   color: var(--variable);
 }
 .st-completed {
   background: var(--ok-soft);
   color: var(--ok);
 }
+.date {
+  font-size: var(--text-sm);
+}
 .counts {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
-  margin-left: auto;
+  justify-content: flex-end;
+  gap: 0.25rem 1.25rem;
 }
-.counts:empty {
-  display: none;
+.count {
+  white-space: nowrap;
+}
+.ch {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
 }
 .failed {
   color: var(--bad);
 }
 .chevron {
-  position: absolute;
-  right: 16px;
-  top: 12px;
+  justify-self: end;
   color: var(--muted);
   transition: transform 0.15s;
 }
@@ -393,13 +466,13 @@ h1 {
 }
 .detail {
   border-top: 1px solid var(--line);
-  padding: 16px 20px 18px;
+  padding: 1rem 1.25rem 1.125rem;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 0.875rem;
 }
 .detail h3 {
-  margin: 0 0 6px;
+  margin: 0 0 0.375rem;
   font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -411,8 +484,8 @@ h1 {
 }
 .brief {
   margin: 0;
-  padding: 10px 14px;
-  border-left: 3px solid var(--accent);
+  padding: 0.625rem 0.875rem;
+  border-left: 0.1875rem solid var(--accent);
   background: var(--accent-soft);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   white-space: pre-wrap;
@@ -421,17 +494,17 @@ h1 {
   font-size: var(--text-sm);
 }
 .unsupported {
-  margin: 6px 0 0;
-  padding-left: 18px;
+  margin: 0.375rem 0 0;
+  padding-left: 1.125rem;
   color: var(--warn);
 }
 table {
   border-collapse: collapse;
-  margin-top: 6px;
+  margin-top: 0.375rem;
 }
 th,
 td {
-  padding: 4px 12px 4px 0;
+  padding: 0.25rem 0.75rem 0.25rem 0;
   text-align: right;
   font-weight: 400;
 }
@@ -444,7 +517,7 @@ tbody th {
 }
 .msg {
   white-space: pre-wrap;
-  margin-bottom: 6px !important;
+  margin-bottom: 0.375rem !important;
 }
 .msg .label {
   display: block;
@@ -455,7 +528,7 @@ tbody th {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 0.625rem;
 }
 a.btn {
   text-decoration: none;
@@ -475,16 +548,31 @@ a.btn {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .more {
-  margin-top: 12px;
+  margin-top: 0.75rem;
+}
+@media (max-width: 720px) {
+  .cols {
+    display: none;
+  }
+  .row-head {
+    grid-template-columns: auto auto minmax(0, 1fr) 1rem;
+    row-gap: 0.375rem;
+  }
+  .send-cell:not(:has(.send-at)) {
+    display: none;
+  }
+  .send-at::before {
+    content: 'gönderim: ';
+  }
+  .counts {
+    grid-column: 1 / -2;
+    justify-content: flex-start;
+  }
 }
 @media (max-width: 560px) {
-  .counts {
-    margin-left: 0;
-    width: 100%;
-  }
   table {
     display: block;
     overflow-x: auto;

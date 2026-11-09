@@ -48,10 +48,10 @@ function commit() {
 
 <style scoped>
 input {
-  width: 64px;
-  padding: 2px 6px;
+  width: 4rem;
+  padding: 0.125rem 0.375rem;
   border: 1px solid var(--line-strong);
-  border-radius: 5px;
+  border-radius: 0.3125rem;
   background: var(--surface);
   font-family: var(--font-mono);
   font-size: var(--text-sm);

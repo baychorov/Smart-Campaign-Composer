@@ -385,6 +385,18 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - **Silme:** Tek bir `DELETE … WHERE status = 'draft'`. Onay satırı ilk adımda kilitlediği için aynı anda gelen onay ve silmeden yalnızca biri başarılı olur. Onaylanmış kampanya silinemez (`409`); gönderim kayıtları korunur.
   - **Gerekçe:** Pazarlamacı gönderdiği kampanyalara geri dönebilmeli; terk edilen taslaklar listeyi kalabalıklaştırmamalı.
 
+- **Güncelleme (2026-11-09, PLAN adım 15c): Ölçek, gezinme ve sadeleştirme (kullanıcı kararları).**
+  - **Ölçek:** Arayüz ekrana orantılı yayılmalı; eski hâlinde yazılar küçük kalıyor ve içerik ortada toplanıyordu. Sayfa stilleri `rem` birimindedir; kök yazı boyutu kampanya sayfalarında %140, brief sayfasında %150'dir (`html[data-page]`, `App.vue` ayarlar). Böylece yazı, boşluk ve genişlik birlikte büyür. Yüzde değeri tarayıcının yazı boyutu ayarını korur.
+    - Üst bar ve sayfa kapsayıcısının genişliği (`.container`, 1760 px) piksel olarak sabittir: üst bar her sayfada aynı boyutta ve aynı yerde durur. `scrollbar-gutter: stable` kısa ve uzun sayfalarda genişliği eşitler. 1–2 px'lik çizgiler piksel kalır (ölçeklenince bulanıklaşır).
+    - Alternatifler: CSS `zoom` (yerleşimi ve medya sorgularını şaşırtır), yalnızca kapsayıcıyı genişletmek (yazılar yine küçük kalır; kullanıcı reddetti).
+  - **Gezinme:** Üst barda iki bölüm vardır: "Kampanyalar" ve "Yeni kampanya". Kampanya sayfası Kampanyalar'ın alt sayfasıdır; menüde Kampanyalar aktif görünür. Kampanya sayfasının sol üstünde `← Kampanyalar` bağlantısı vardır. Listeden gelindiyse tarayıcı geçmişinde geri gidilir; liste `KeepAlive` ile bellekte tutulduğu için filtre, açık satır ve kaydırma konumu korunur, durum ve sayılar arka planda tazelenir. Brief'ten ya da bağlantıyla gelindiyse liste açılır. Liste filtresi URL'dedir (`?filtre=taslak|gonderilen`); yenilemede de korunur.
+  - **Liste satırı:** Sabit sütunlu ızgara (No, Durum, Tarih, Gönderim, Kanallar) ve üstte gri sütun başlıkları; numaralar `#` olmadan, kalın.
+  - **Kaldırılanlar:** Kitle kutusundaki "Kanal izni filtresi her zaman uygulanır" notu (filtre backend'de değişmeden uygulanır; kural özeti "Kanal izni olan…" diye başlar), "· hepsi sağlanmalı" ibaresi, mesaj üretimindeki olay satırı (`started → …`; geliştirme bilgisi, frontend'deki kaydı da silindi). Bekleme metni "Claude … çeviriyor" yerine "Hazırlanıyor…". Mock modu üst barda küçük bir "Demo" etiketidir.
+  - **Gönderim zamanı:** `datetime-local` alanı 12/24 saati tarayıcının ve işletim sisteminin diline göre seçer; koddan ayarlanamaz. Alan, tarih alanı ile saat (00–23) ve dakika (5'er dakika; önerilen zaman ızgara dışındaysa o da listelenir) seçimlerine bölündü. Yeni seçilen tarih 10:00 ile başlar; tarihi silmek "hemen gönder" demektir. Değer biçimi (`2026-11-02T10:00`, Türkiye saati) değişmedi.
+    - Alternatifler: hazır tarih seçici bileşeni (yeni bağımlılık, tasarıma uydurma işi), olduğu gibi bırakmak.
+    - Sınır: Tarih alanının biçimi (`gg.aa.yyyy` ya da `mm/dd/yyyy`) yine tarayıcının diline bağlıdır.
+  - **Mesaj alanları (aynı gün, ikinci tur):** Sayaç yalnızca yazılan uzunluğu gösterir (`117 / 160`); "en kötü durum" sayısı ve uzunluk barı pazarlamacı için kaldırıldı. En kötü durum kontrolü backend'de aynen sürer (R-CNT-2): sınırı aşan mesajda sayaç kırmızıdır ve onay, backend'in hata mesajıyla engellenir. Önizleme sabit bir örnek müşteriyle gösterilir; değişken listesi ve doğrulama açıklaması gibi geliştirici metinleri arayüzde yoktur.
+
 ## D-COMPOSE: Tek komutla kurulum (D-2)
 
 - **Karar (2026-11-08, PLAN adım 12):** `docker compose up --build` tüm sistemi başlatır. Servisler ve açılış sırası:

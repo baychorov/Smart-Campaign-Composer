@@ -15,11 +15,14 @@ function mountPanel(campaign = makeCampaign(), extra: Record<string, unknown> = 
 }
 
 describe('AudiencePanel', () => {
-  it('shows common conditions, the count and the consent lock', () => {
+  it('shows common conditions and the count, without the developer-facing notes', () => {
     const w = mountPanel()
     expect(w.get('[data-test="reachable"]').text()).toBe('156')
     expect(w.findAll('[data-test="common"] .cond')).toHaveLength(3)
-    expect(w.text()).toContain('Kanal izni filtresi her zaman uygulanır')
+    expect(w.get('[data-test="common"] .box-head').text()).toBe('Koşullar')
+    // The consent filter is still applied by the backend; the summary says so.
+    expect(w.text()).toContain('Kanal izni olan')
+    expect(w.text()).not.toContain('Kanal izni filtresi')
   })
 
   it('shows groups joined by OR with their own counts', () => {

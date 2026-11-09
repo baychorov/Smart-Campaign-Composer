@@ -72,7 +72,7 @@ export function useContentEditor(
 
   function follow(genId: string) {
     writeStored(campaignId, genId)
-    gen.value = { ...initialGen(), phase: 'preparing', log: [] }
+    gen.value = { ...initialGen(), phase: 'preparing' }
     stream.connect(api.generationEventsUrl(genId))
   }
 

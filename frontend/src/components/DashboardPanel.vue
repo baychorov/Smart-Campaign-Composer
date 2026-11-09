@@ -207,7 +207,7 @@ const approvedAt = computed(() =>
 .dashboard {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  gap: 1.125rem;
 }
 .full {
   grid-column: 1 / -1;
@@ -224,10 +224,10 @@ const approvedAt = computed(() =>
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px 36px;
+  gap: 0.875rem 2.25rem;
 }
 .kpi-value {
-  font-size: 26px;
+  font-size: 1.625rem;
   font-weight: 600;
   line-height: 1.2;
 }
@@ -245,10 +245,10 @@ const approvedAt = computed(() =>
 .status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 0.4375rem;
   font-weight: 500;
-  border-radius: 999px;
-  padding: 4px 12px;
+  border-radius: 62.4375rem;
+  padding: 0.25rem 0.75rem;
   background: var(--info-soft);
   color: var(--info);
 }
@@ -256,13 +256,13 @@ const approvedAt = computed(() =>
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 14px;
+  gap: 0.5rem 0.875rem;
 }
 .confirm {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .btn-danger {
   background: var(--bad);
@@ -277,8 +277,8 @@ const approvedAt = computed(() =>
   color: var(--ok);
 }
 .dot {
-  width: 8px;
-  height: 8px;
+  width: 0.5rem;
+  height: 0.5rem;
   border-radius: 50%;
   background: currentColor;
 }
@@ -296,16 +296,16 @@ const approvedAt = computed(() =>
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 0.375rem;
 }
 .btn-sm {
-  padding: 2px 10px;
+  padding: 0.125rem 0.625rem;
   font-size: var(--text-xs);
 }
 .stack {
   display: flex;
-  height: 12px;
-  border-radius: 6px;
+  height: 0.75rem;
+  border-radius: 0.375rem;
   overflow: hidden;
   background: var(--surface-muted);
   border: 1px solid var(--line);
@@ -333,7 +333,7 @@ const approvedAt = computed(() =>
 .cells {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
+  gap: 0.5rem;
 }
 @media (max-width: 520px) {
   .cells {
@@ -343,22 +343,22 @@ const approvedAt = computed(() =>
 .cell {
   background: var(--surface-muted);
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
+  padding: 0.5rem 0.625rem;
 }
 .cell-value {
   font-weight: 600;
   font-size: var(--text-lg);
 }
 .cell-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--muted);
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 0.3125rem;
 }
 .legend {
-  width: 7px;
-  height: 7px;
+  width: 0.4375rem;
+  height: 0.4375rem;
   border-radius: 2px;
   display: inline-block;
 }
@@ -370,7 +370,7 @@ const approvedAt = computed(() =>
 .errors th,
 .errors td {
   text-align: left;
-  padding: 7px 4px;
+  padding: 0.4375rem 0.25rem;
   border-bottom: 1px solid var(--line);
 }
 .errors th {

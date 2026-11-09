@@ -4,15 +4,34 @@
   box-sizing: border-box;
 }
 
+/*
+ * UI scale (decision 2026-11-09, D-FE). Page styles are in rem, so the
+ * root font size scales text, spacing and widths together: 140% on the
+ * campaign pages, 150% on the brief form (App.vue sets data-page). A
+ * percentage keeps the user's browser font setting. The top bar is in px
+ * and stays the same size on every page; hairlines (1-2px) stay px too.
+ */
+html {
+  font-size: 140%;
+  /* Room for the scrollbar on every page, so short and long pages have the
+     same width and the top bar does not shift between them. */
+  scrollbar-gutter: stable;
+}
+html[data-page='new'] {
+  font-size: 150%;
+}
+
 html,
 body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: var(--text-md);
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+}
+body {
+  font-size: var(--text-md);
 }
 
 button,
@@ -31,22 +50,24 @@ button {
   outline-offset: 2px;
 }
 
+/* px on purpose: the top bar and the pages share this width whatever the
+   page's scale, so the brand and the menu do not move between pages. */
 .container {
-  max-width: 1280px;
+  max-width: 1760px;
   margin: 0 auto;
-  padding-left: max(20px, env(safe-area-inset-left, 0px));
-  padding-right: max(20px, env(safe-area-inset-right, 0px));
+  padding-left: max(28px, env(safe-area-inset-left, 0px));
+  padding-right: max(28px, env(safe-area-inset-right, 0px));
 }
 
 /* Buttons */
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink-soft);
-  padding: 7px 14px;
+  padding: 0.4375rem 0.875rem;
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -71,7 +92,7 @@ button {
   cursor: not-allowed;
 }
 .btn-lg {
-  padding: 9px 18px;
+  padding: 0.5625rem 1.125rem;
   font-size: var(--text-md);
 }
 
@@ -87,8 +108,8 @@ button {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 8px 12px;
-  padding: 16px 20px 12px;
+  gap: 0.5rem 0.75rem;
+  padding: 1rem 1.25rem 0.75rem;
   border-bottom: 1px solid var(--line);
 }
 .card-title {
@@ -100,27 +121,27 @@ button {
   color: var(--ink-soft);
 }
 .card-body {
-  padding: 16px 20px 20px;
+  padding: 1rem 1.25rem 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 0.875rem;
 }
 
 /* Notes */
 .note {
   border-radius: var(--radius-md);
-  padding: 10px 14px;
+  padding: 0.625rem 0.875rem;
   font-size: var(--text-sm);
   border: 1px solid transparent;
 }
 .note-title {
   display: block;
   font-weight: 600;
-  margin-bottom: 2px;
+  margin-bottom: 0.125rem;
 }
 .note ul {
-  margin: 2px 0 0;
-  padding-left: 18px;
+  margin: 0.125rem 0 0;
+  padding-left: 1.125rem;
 }
 .note-warn {
   background: var(--warn-soft);
@@ -150,9 +171,9 @@ button {
 }
 .code {
   font-family: var(--font-mono);
-  font-size: 11.5px;
-  padding: 0 6px;
-  border-radius: 4px;
+  font-size: 0.7188rem;
+  padding: 0 0.375rem;
+  border-radius: 0.25rem;
   background: var(--surface-muted);
   border: 1px solid var(--line);
   color: var(--muted);
@@ -161,16 +182,16 @@ button {
 
 .swatch {
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 0.5rem;
+  height: 0.5rem;
   border-radius: 2px;
-  margin-right: 6px;
+  margin-right: 0.375rem;
 }
 
 .spinner {
   display: inline-block;
-  width: 14px;
-  height: 14px;
+  width: 0.875rem;
+  height: 0.875rem;
   border: 2px solid var(--line-strong);
   border-top-color: var(--accent);
   border-radius: 50%;

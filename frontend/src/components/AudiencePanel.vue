@@ -71,14 +71,6 @@ function rewriteBrief() {
           <span><i class="swatch" style="background: var(--email)"></i>Email izni olan <b class="num">{{ formatCount(audience.email) }}</b></span>
         </div>
 
-        <div class="consent">
-          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-            <rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5" />
-            <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" stroke-width="1.5" />
-          </svg>
-          Kanal izni filtresi her zaman uygulanır ve kuraldan kaldırılamaz.
-        </div>
-
         <div v-if="error" class="note note-bad" role="alert">
           <span class="note-title">{{ error.message }} Kural değiştirilmedi.</span>
           <ul v-if="error.issues.length">
@@ -96,7 +88,7 @@ function rewriteBrief() {
         <div v-if="campaign.summary.all" class="note note-plain">Kural koşul içermiyor: izni olan herkes hedeflenir.</div>
 
         <div v-if="rule.common.length" class="box" data-test="common">
-          <div class="box-head">{{ rule.groups.length ? 'Herkeste ortak' : 'Koşullar' }} · hepsi sağlanmalı</div>
+          <div class="box-head">{{ rule.groups.length ? 'Herkeste ortak' : 'Koşullar' }}</div>
           <div class="conds">
             <ConditionRow
               v-for="(c, i) in rule.common"
@@ -171,6 +163,10 @@ function rewriteBrief() {
 </template>
 
 <style scoped>
+/* More air between the summary, the counts and the condition boxes. */
+.card-body {
+  gap: 1.25rem;
+}
 .spacer {
   flex: 1;
 }
@@ -183,29 +179,20 @@ function rewriteBrief() {
   margin: 0;
   background: var(--surface-muted);
   border-radius: var(--radius-md);
-  padding: 10px 14px;
+  padding: 0.625rem 0.875rem;
   color: var(--ink-soft);
 }
 .channel-counts {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px;
+  gap: 0.5rem 1.75rem;
+  padding: 0 0.875rem;
   font-size: var(--text-sm);
   color: var(--muted);
 }
 .channel-counts b {
   color: var(--ink);
   font-weight: 600;
-}
-.consent {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--text-sm);
-  color: var(--muted);
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius-md);
-  padding: 7px 12px;
 }
 .box {
   border: 1px solid var(--line);
@@ -214,22 +201,28 @@ function rewriteBrief() {
 }
 .box-head {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
-  padding: 7px 12px;
-  font-size: var(--text-xs);
-  color: var(--muted);
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-soft);
   background: var(--surface-muted);
   border-bottom: 1px solid var(--line);
 }
 .box-head b {
   color: var(--ink);
 }
+.box-head span:last-child:not(:first-child) {
+  font-weight: 400;
+  color: var(--muted);
+}
 .conds {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px;
+  gap: 0.375rem;
+  padding: 0.5rem;
 }
 .joiner {
   font-size: var(--text-xs);
@@ -240,9 +233,9 @@ function rewriteBrief() {
 .or {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.625rem;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 0.7188rem;
   letter-spacing: 0.1em;
   color: var(--muted);
 }
@@ -254,6 +247,6 @@ function rewriteBrief() {
   background: var(--line);
 }
 .note-text {
-  margin: 6px 0 0;
+  margin: 0.375rem 0 0;
 }
 </style>

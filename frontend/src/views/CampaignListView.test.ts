@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { CampaignListItem, CampaignPage } from '../api/types'
@@ -12,13 +12,21 @@ const router = createRouter({
   history: createMemoryHistory(),
   routes: [
     { path: '/', name: 'new', component: {} },
+    { path: '/campaigns', name: 'campaigns', component: {} },
     { path: '/campaigns/:id', name: 'campaign', component: {} },
   ],
 })
 
 afterEach(() => vi.unstubAllGlobals())
+// Unmount after each test: the router is shared, and a list left mounted
+// would follow the next test's URL changes.
+enableAutoUnmount(afterEach)
 
-const mountView = () => mount(CampaignListView, { global: { plugins: [router] } })
+// The list's filter lives in the URL, so every test starts on /campaigns.
+async function mountView(path = '/campaigns') {
+  await router.replace(path)
+  return mount(CampaignListView, { global: { plugins: [router] } })
+}
 
 const sentItem: CampaignListItem = {
   id: 8,
@@ -38,10 +46,12 @@ const calls = (c: { method: string; path: string }[]) => c.map((x) => `${x.metho
 describe('CampaignListView', () => {
   it('shows collapsed rows without the brief', async () => {
     fakeFetch({ 'GET /api/campaigns?filter=all': () => page([sentItem, draftItem]) })
-    const w = mountView()
+    const w = await mountView()
     await flushPromises()
 
     const sent = w.get('[data-test="row-8"]')
+    expect(sent.get('.id').text()).toBe('8') // no "#"
+    expect(w.get('.cols').text()).toContain('Kanallar')
     expect(sent.get('[data-test="status"]').text()).toBe('Tamamlandı')
     expect(sent.get('[data-test="counts"]').text()).toContain('108')
     expect(sent.get('[data-test="counts"]').text()).toContain('2 başarısız')
@@ -53,7 +63,7 @@ describe('CampaignListView', () => {
   it('shows the send time of a scheduled campaign in its row', async () => {
     const item: CampaignListItem = { ...sentItem, id: 9, status: 'scheduled', send_at: '2026-11-10T07:00:00Z', progress: {} }
     fakeFetch({ 'GET /api/campaigns?filter=all': () => page([item]) })
-    const w = mountView()
+    const w = await mountView()
     await flushPromises()
     expect(w.get('[data-test="row-9"] [data-test="status"]').text()).toBe('Zamanlandı')
     expect(w.get('[data-test="row-send-at"]').text()).toContain('10:00')
@@ -65,7 +75,7 @@ describe('CampaignListView', () => {
       'GET /api/campaigns?filter=all': () => page([sentItem]),
       'GET /api/campaigns/8': () => ({ json: { campaign } }),
     })
-    const w = mountView()
+    const w = await mountView()
     await flushPromises()
 
     const toggle = w.get('[data-test="row-8"] [data-test="toggle"]')
@@ -93,7 +103,7 @@ describe('CampaignListView', () => {
       'GET /api/campaigns/7': () => ({ json: { campaign: makeCampaign() } }),
       'DELETE /api/campaigns/7': () => ({ json: null }),
     })
-    const w = mountView()
+    const w = await mountView()
     await flushPromises()
     await w.get('[data-test="row-7"] [data-test="toggle"]').trigger('click')
     await flushPromises()
@@ -118,7 +128,7 @@ describe('CampaignListView', () => {
         return { status: 409, json: { error: 'not_draft', message: 'Kampanya artık taslak değil.' } }
       },
     })
-    const w = mountView()
+    const w = await mountView()
     await flushPromises()
     await w.get('[data-test="row-7"] [data-test="toggle"]').trigger('click')
     await flushPromises()
@@ -136,7 +146,7 @@ describe('CampaignListView', () => {
       'GET /api/campaigns?filter=all&before=8': () => page([draftItem]),
       'GET /api/campaigns?filter=draft': () => page([]),
     })
-    const w = mountView()
+    const w = await mountView()
     await flushPromises()
 
     await w.get('[data-test="more"]').trigger('click')
@@ -147,6 +157,23 @@ describe('CampaignListView', () => {
     await w.get('[data-test="filter-draft"]').trigger('click')
     await flushPromises()
     expect(calls(c).at(-1)).toBe('GET /api/campaigns?filter=draft')
+    expect(router.currentRoute.value.query).toEqual({ filtre: 'taslak' })
     expect(w.get('[data-test="empty"]').text()).toContain('Bu filtrede kampanya yok')
+  })
+
+  it('reads the filter from the URL and follows it when the URL changes', async () => {
+    const c = fakeFetch({
+      'GET /api/campaigns?filter=sent': () => page([sentItem]),
+      'GET /api/campaigns?filter=all': () => page([sentItem, draftItem]),
+    })
+    const w = await mountView('/campaigns?filtre=gonderilen')
+    await flushPromises()
+    expect(calls(c)).toEqual(['GET /api/campaigns?filter=sent'])
+    expect(w.get('[data-test="filter-sent"]').attributes('aria-pressed')).toBe('true')
+
+    await router.push('/campaigns') // the menu's "Kampanyalar" link
+    await flushPromises()
+    expect(calls(c).at(-1)).toBe('GET /api/campaigns?filter=all')
+    expect(w.findAll('li.row')).toHaveLength(2)
   })
 })

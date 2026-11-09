@@ -108,12 +108,12 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 6px 6px 6px 12px;
+  gap: 0.375rem;
+  padding: 0.375rem 0.375rem 0.375rem 0.75rem;
   border-radius: var(--radius-sm);
   background: var(--accent-soft);
   font-size: var(--text-md);
-  min-height: 38px;
+  min-height: 2.375rem;
 }
 .key {
   font-weight: 500;
@@ -126,26 +126,26 @@ const emit = defineEmits<{
 .token {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 0.125rem;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 5px;
-  padding: 0 4px 0 8px;
+  border-radius: 0.3125rem;
+  padding: 0 0.25rem 0 0.5rem;
   font-size: var(--text-sm);
 }
 .token-x {
   border: 0;
   background: none;
   color: var(--muted);
-  padding: 0 3px;
-  font-size: 14px;
+  padding: 0 0.1875rem;
+  font-size: 0.875rem;
   line-height: 1;
 }
 .token-x:hover {
   color: var(--bad);
 }
 .dates {
-  padding: 0 8px;
+  padding: 0 0.5rem;
 }
 .then {
   font-weight: 400;
@@ -155,10 +155,10 @@ const emit = defineEmits<{
   border: 0;
   background: none;
   color: var(--muted);
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  font-size: 17px;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.375rem;
+  font-size: 1.0625rem;
   line-height: 1;
 }
 .remove:hover {
