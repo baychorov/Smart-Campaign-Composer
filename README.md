@@ -1,5 +1,7 @@
 # Smart Campaign Composer
 
+[![CI](https://github.com/baychorov/Smart-Campaign-Composer/actions/workflows/ci.yml/badge.svg)](https://github.com/baychorov/Smart-Campaign-Composer/actions/workflows/ci.yml)
+
 Pazarlamacı ne istediğini doğal dille yazar, örneğin:
 
 > "Son 30 günde sepetine ürün ekleyip alışveriş yapmayan İstanbul'daki kullanıcılara
@@ -154,6 +156,13 @@ yanlışlıkla çalıştırılamaz.
 | `make test-live` | Katman 5 | API key, **ücretli** |
 
 `make test` Postgres container'ını kendisi başlatır.
+
+### CI
+
+`main`'e her push'ta ve her pull request'te GitHub Actions üç job çalıştırır: `make lint`,
+`make test` ve compose ile ayağa kaldırılan sistemde `make smoke`. CI'da API key yoktur ve
+LLM mock modda çalışır; ücretli testler (`test-live`, `eval`) CI'a dahil değildir. Yalnızca
+doküman değişiklikleri CI'ı tetiklemez. Ayrıntılar: `DECISIONS.md` D-CI.
 
 ### Model değerlendirmesi (eval)
 

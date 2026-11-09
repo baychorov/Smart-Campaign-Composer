@@ -323,6 +323,21 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Alternatifler:** Gönderim anında kitle hesaplayan bir zamanlayıcı döngüsü (yukarıda D-SNAPSHOT güncellemesi), harici zamanlayıcı (pg_cron, iş kuyruğu kütüphaneleri: yeni altyapı), bellekte zamanlayıcı (süreç yeniden başlarsa kaybolur). Zamanı yalnızca pazarlamacının girmesi: brief'te zaten yazılı olanı tekrar girmek gereksiz iş (kullanıcı kararı).
 - **Sınırlar:** Tekrarlayan gönderim yok. Gönderim başladıktan sonra durdurma yok. Onaydan sonra kitleye giren kullanıcılar dahil edilmez. Zamanlanmış kampanyanın zamanı onaydan sonra değiştirilemez; iptal edip yeni kampanya açmak gerekir.
 
+## D-CI: CI pipeline (Bölüm 9 bonus)
+
+- **Karar (2026-11-09, PLAN adım 15b):** GitHub Actions (`.github/workflows/ci.yml`), `ubuntu-latest` üzerinde paralel çalışan üç job:
+  - `lint`: `make lint`.
+  - `test`: `make test` (katman 1–4 ve Vitest). Postgres, yereldeki gibi compose ile başlatılır; ayrı bir CI servis tanımı yoktur.
+  - `smoke`: `docker compose up --build --detach --wait web worker`, ardından `make smoke`, en sonunda her durumda `docker compose down -v`. Hata olursa servis logları yazdırılır.
+  - **Tetikleme (kullanıcı kararı):** `main`'e her push ve her pull request. Tag ile tetikleme ve versiyonlama yok. Yalnızca doküman değişiklikleri (`**.md`, `ai-sessions/`, `eval/reports/`) CI'ı tetiklemez.
+  - **Sürümler tek kaynaktan okunur:** Go sürümü `backend/go.mod`'dan, Node sürümü kökteki `.nvmrc`'den (geliştirme ortamındaki sürüm, `nvm use` ile de kullanılır) alınır. Go modül ve npm cache'i açıktır.
+  - Aynı branch'e yeni bir push gelirse devam eden çalıştırma iptal edilir (`concurrency`). Workflow'un repo izni yalnızca okumadır.
+  - **Secret yok:** CI'da LLM her zaman mock modda çalışır. `make test-live` ve `make eval` CI'da çalışmaz (D-TEST); ücretli çağrı riski yoktur.
+  - **Branch protection yok (kullanıcı kararı):** Şimdilik tek geliştirici doğrudan `main`'e push ediyor. Eklenirse doküman atlama kuralı gözden geçirilmeli, çünkü atlanan bir PR'da zorunlu kontrol beklemede kalır.
+- **Gerekçe:** CI "bu commit sağlam mı?" sorusunu sorar. Hata, geldiği commit'te yakalandığında değerlidir; yalnızca tag'de çalışan bir pipeline hatayı birçok commit sonra, kaynağı belirsiz biçimde gösterir. Tag tetiklemesi sürüm yayınlamanın (CD) konusudur ve bu ölçekte bir release tüketicisi yoktur. PR tetiklemesi ekip çalışmasında birleştirme öncesi kontrol sağlar. Smoke job'u, değerlendiren kişinin `docker compose up` deneyimini (D-2) her değişiklikte doğrular.
+- **Alternatifler:** Yalnızca tag'de çalışmak (yukarıda). Postgres'i Actions `services:` ile başlatmak: yereldeki `make test`'ten farklı bir yol olurdu. Smoke'u CI'a almamak: daha hızlı, ama imaj ve compose hatalarını yakalamaz.
+- **Sınırlar:** Smoke testi zamanlamaya duyarlı kontroller içerir (SSE akışı, saniyede 100). Paylaşımlı runner'da kararsız sonuç verirse yalnızca `main` push'unda çalışacak şekilde daraltılacak.
+
 ## D-OBS: Gözlemlenebilirlik (R-OBS-1..3)
 
 - **Karar:** `/metrics` Prometheus formatında yayınlanır (`client_golang`). Health kontrolü iki endpoint'e ayrılır: `/healthz` sürecin ayakta olup olmadığını, `/readyz` DB'ye erişilip erişilemediğini kontrol eder. Hem api hem worker için geçerlidir. Metrikler: gönderim durumları, provider gecikmesi, retry sayısı, LLM denemeleri ve doğrulama hataları, token kullanımı.
