@@ -1,0 +1,661 @@
+{
+  "meta": {
+    "model": "claude-sonnet-5-5",
+    "provider": "anthropic",
+    "effort": "low",
+    "started_at": "2026-11-09T14:11:09.169089962+03:00",
+    "duration": "10.349s",
+    "commit": "36a080b",
+    "runs_per_brief": 3,
+    "calls": 9,
+    "seed_now": "2026-11-01T12:00:00Z",
+    "seed_users": 5000,
+    "rng_seed": 42
+  },
+  "totals": {
+    "briefs": 3,
+    "runs": 9,
+    "correct_runs": 8,
+    "consistent_briefs": 2,
+    "runs_with_repairs": 0,
+    "repairs": 0,
+    "errors": 0,
+    "unsafe": 0,
+    "input_tokens": 34857,
+    "output_tokens": 2553
+  },
+  "cases": [
+    {
+      "id": 4,
+      "category": "Karmaşık",
+      "brief": "İstanbul'da yaşayan, son 30 günde sepete ürün ekleyip alışveriş yapmayan kullanıcılara samimi bir dille %10 indirim kodu içeren hatırlatma gönder.",
+      "status": [
+        "ok"
+      ],
+      "audience": "exact",
+      "rules": [
+        {
+          "status": "ok",
+          "audience_scope": "filtered",
+          "common": [
+            {
+              "type": "attribute",
+              "field": "city",
+              "op": "in",
+              "values": [
+                "İstanbul"
+              ]
+            },
+            {
+              "type": "event",
+              "event": "add_to_cart",
+              "occurred": true,
+              "within_days": 30,
+              "then": {
+                "event": "purchase",
+                "occurred": false
+              }
+            }
+          ],
+          "groups": null,
+          "assumptions": null,
+          "unsupported": null,
+          "notes": null
+        }
+      ],
+      "reasons": null,
+      "needs_assumption": false,
+      "expected_sizes": [
+        173
+      ],
+      "correct_runs": 3,
+      "consistent": true,
+      "runs": [
+        {
+          "run": 1,
+          "status": "ok",
+          "correct": true,
+          "problems": null,
+          "audience_size": 173,
+          "extra": 0,
+          "missing": 0,
+          "rule": {
+            "status": "ok",
+            "audience_scope": "filtered",
+            "common": [
+              {
+                "type": "attribute",
+                "field": "city",
+                "op": "in",
+                "values": [
+                  "İstanbul"
+                ]
+              },
+              {
+                "type": "event",
+                "event": "add_to_cart",
+                "occurred": true,
+                "within_days": 30,
+                "then": {
+                  "event": "purchase",
+                  "occurred": false
+                }
+              }
+            ],
+            "groups": null,
+            "assumptions": [],
+            "unsupported": [],
+            "notes": [
+              "Samimi bir dil kullanılması ve %10 indirim kodu mesaj içeriğidir, hedef kitle kriteri değildir."
+            ]
+          },
+          "summary": "şehri İstanbul olan VE son 30 günde sepete ürün eklemiş ve sonrasında alışveriş yapmamış",
+          "repairs": 0,
+          "calls": 1,
+          "input_tokens": 3879,
+          "output_tokens": 181,
+          "duration": "2.898s"
+        },
+        {
+          "run": 2,
+          "status": "ok",
+          "correct": true,
+          "problems": null,
+          "audience_size": 173,
+          "extra": 0,
+          "missing": 0,
+          "rule": {
+            "status": "ok",
+            "audience_scope": "filtered",
+            "common": [
+              {
+                "type": "attribute",
+                "field": "city",
+                "op": "in",
+                "values": [
+                  "İstanbul"
+                ]
+              },
+              {
+                "type": "event",
+                "event": "add_to_cart",
+                "occurred": true,
+                "within_days": 30,
+                "then": {
+                  "event": "purchase",
+                  "occurred": false
+                }
+              }
+            ],
+            "groups": null,
+            "assumptions": [],
+            "unsupported": [],
+            "notes": [
+              "Samimi dil ve %10 indirim kodu mesaj içeriğidir, hedef kitle kriteri değildir."
+            ]
+          },
+          "summary": "şehri İstanbul olan VE son 30 günde sepete ürün eklemiş ve sonrasında alışveriş yapmamış",
+          "repairs": 0,
+          "calls": 1,
+          "input_tokens": 3879,
+          "output_tokens": 174,
+          "duration": "2.589s"
+        },
+        {
+          "run": 3,
+          "status": "ok",
+          "correct": true,
+          "problems": null,
+          "audience_size": 173,
+          "extra": 0,
+          "missing": 0,
+          "rule": {
+            "status": "ok",
+            "audience_scope": "filtered",
+            "common": [
+              {
+                "type": "attribute",
+                "field": "city",
+                "op": "in",
+                "values": [
+                  "İstanbul"
+                ]
+              },
+              {
+                "type": "event",
+                "event": "add_to_cart",
+                "occurred": true,
+                "within_days": 30,
+                "then": {
+                  "event": "purchase",
+                  "occurred": false
+                }
+              }
+            ],
+            "groups": null,
+            "assumptions": [],
+            "unsupported": [],
+            "notes": [
+              "Samimi bir dil kullanılması ve %10 indirim kodu mesaj içeriğidir, hedef kitle kriteri değildir."
+            ]
+          },
+          "summary": "şehri İstanbul olan VE son 30 günde sepete ürün eklemiş ve sonrasında alışveriş yapmamış",
+          "repairs": 0,
+          "calls": 1,
+          "input_tokens": 3879,
+          "output_tokens": 181,
+          "duration": "1.836s"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "category": "Karmaşık",
+      "brief": "Son 14 günde ürün inceleyip sepete eklememiş, son 90 günde de alışveriş yapmamış 18 yaş üstü kullanıcılar.",
+      "status": [
+        "ok"
+      ],
+      "audience": "exact",
+      "rules": [
+        {
+          "status": "ok",
+          "audience_scope": "filtered",
+          "common": [
+            {
+              "type": "event",
+              "event": "product_view",
+              "occurred": true,
+              "within_days": 14,
+              "then": {
+                "event": "add_to_cart",
+                "occurred": false
+              }
+            },
+            {
+              "type": "event",
+              "event": "purchase",
+              "occurred": false,
+              "within_days": 90
+            },
+            {
+              "type": "attribute",
+              "field": "age",
+              "op": "gte",
+              "value": 18
+            }
+          ],
+          "groups": null,
+          "assumptions": null,
+          "unsupported": null,
+          "notes": null
+        }
+      ],
+      "reasons": null,
+      "needs_assumption": false,
+      "expected_sizes": [
+        643
+      ],
+      "correct_runs": 3,
+      "consistent": true,
+      "runs": [
+        {
+          "run": 1,
+          "status": "ok",
+          "correct": true,
+          "problems": null,
+          "audience_size": 643,
+          "extra": 0,
+          "missing": 0,
+          "rule": {
+            "status": "ok",
+            "audience_scope": "filtered",
+            "common": [
+              {
+                "type": "attribute",
+                "field": "age",
+                "op": "gte",
+                "value": 18
+              },
+              {
+                "type": "event",
+                "event": "product_view",
+                "occurred": true,
+                "within_days": 14,
+                "then": {
+                  "event": "add_to_cart",
+                  "occurred": false
+                }
+              },
+              {
+                "type": "event",
+                "event": "purchase",
+                "occurred": false,
+                "within_days": 90
+              }
+            ],
+            "groups": null,
+            "assumptions": [
+              "\"18 yaş üstü\" 18 yaş dahil olacak şekilde age gte 18 olarak alındı.",
+              "\"Ürün inceleyip sepete eklememiş\" ürün görüntülemeden sonra sepete ekleme yapmama olarak sıralı koşul alındı (son 14 gün).",
+              "Son 90 günde alışveriş yapmama ayrı bir koşul olarak yazıldı."
+            ],
+            "unsupported": [],
+            "notes": []
+          },
+          "summary": "18 yaş ve üzeri VE son 14 günde ürün incelemiş ve sonrasında sepete ürün eklememiş VE son 90 günde alışveriş yapmamış",
+          "repairs": 0,
+          "calls": 1,
+          "input_tokens": 3861,
+          "output_tokens": 296,
+          "duration": "3.452s"
+        },
+        {
+          "run": 2,
+          "status": "ok",
+          "correct": true,
+          "problems": null,
+          "audience_size": 643,
+          "extra": 0,
+          "missing": 0,
+          "rule": {
+            "status": "ok",
+            "audience_scope": "filtered",
+            "common": [
+              {
+                "type": "event",
+                "event": "product_view",
+                "occurred": true,
+                "within_days": 14,
+                "then": {
+                  "event": "add_to_cart",
+                  "occurred": false
+                }
+              },
+              {
+                "type": "event",
+                "event": "purchase",
+                "occurred": false,
+                "within_days": 90
+              },
+              {
+                "type": "attribute",
+                "field": "age",
+                "op": "gte",
+                "value": 18
+              }
+            ],
+            "groups": null,
+            "assumptions": [
+              "\"Ürün inceleyip sepete eklememiş\" ürün incelemeden sonra sepete ekleme yapılmaması olarak sıralı bağlandı: product_view son 14 gün, ardından add_to_cart yok.",
+              "\"18 yaş üstü\" 18 yaş ve üzeri (age \u003e= 18) olarak yorumlandı.",
+              "Son 90 günde alışveriş yapmamış ayrı bir koşul olarak eklendi."
+            ],
+            "unsupported": [],
+            "notes": []
+          },
+          "summary": "son 14 günde ürün incelemiş ve sonrasında sepete ürün eklememiş VE son 90 günde alışveriş yapmamış VE 18 yaş ve üzeri",
+          "repairs": 0,
+          "calls": 1,
+          "input_tokens": 3861,
+          "output_tokens": 310,
+          "duration": "3.255s"
+        },
+        {
+          "run": 3,
+          "status": "ok",
+          "correct": true,
+          "problems": null,
+          "audience_size": 643,
+          "extra": 0,
+          "missing": 0,
+          "rule": {
+            "status": "ok",
+            "audience_scope": "filtered",
+            "common": [
+              {
+                "type": "attribute",
+                "field": "age",
+                "op": "gte",
+                "value": 18
+              },
+              {
+                "type": "event",
+                "event": "product_view",
+                "occurred": true,
+                "within_days": 14,
+                "then": {
+                  "event": "add_to_cart",
+                  "occurred": false
+                }
+              },
+              {
+                "type": "event",
+                "event": "purchase",
+                "occurred": false,
+                "within_days": 90
+              }
+            ],
+            "groups": null,
+            "assumptions": [
+              "\"18 yaş üstü\" 18 dahil olacak şekilde age gte 18 olarak alındı.",
+              "Ürün incelemenin ardından sepete ekleme yapmama sırası tek koşulda ifade edildi: product_view (son 14 gün) ve sonrasında add_to_cart yapmamış.",
+              "Alışveriş yapmama için ayrı bir pencere verildiği için son 90 günde purchase yapmamış koşulu bağımsız eklendi."
+            ],
+            "unsupported": [],
+            "notes": []
+          },
+          "summary": "18 yaş ve üzeri VE son 14 günde ürün incelemiş ve sonrasında sepete ürün eklememiş VE son 90 günde alışveriş yapmamış",
+          "repairs": 0,
+          "calls": 1,
+          "input_tokens": 3861,
+          "output_tokens": 315,
+          "duration": "3.554s"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "category": "Sıra",
+      "brief": "İzmir ve Bursa'da yaşayan 18-30 yaş arası kullanıcılardan son 7 günde ürün inceledikten sonra sepete ekleyenlere ücretsiz kargo mesajı.",
+      "status": [
+        "ok"
+      ],
+      "audience": "exact",
+      "rules": [
+        {
+          "status": "ok",
+          "audience_scope": "filtered",
+          "common": [
+            {
+              "type": "attribute",
+              "field": "city",
+              "op": "in",
+              "values": [
+                "İzmir",
+                "Bursa"
+              ]
+            },
+            {
+              "type": "attribute",
+              "field": "age",
+              "op": "gte",
+              "value": 18
+            },
+            {
+              "type": "attribute",
+              "field": "age",
+              "op": "lte",
+              "value": 30
+            },
+            {
+              "type": "event",
+              "event": "product_view",
+              "occurred": true,
+              "within_days": 7,
+              "then": {
+                "event": "add_to_cart",
+                "occurred": true
+              }
+            }
+          ],
+          "groups": null,
+          "assumptions": null,
+          "unsupported": null,
+          "notes": null
+        }
+      ],
+      "reasons": null,
+      "needs_assumption": false,
+      "expected_sizes": [
+        12
+      ],
+      "correct_runs": 2,
+      "consistent": false,
+      "runs": [
+        {
+          "run": 1,
+          "status": "ok",
+          "correct": true,
+          "problems": null,
+          "audience_size": 12,
+          "extra": 0,
+          "missing": 0,
+          "rule": {
+            "status": "ok",
+            "audience_scope": "filtered",
+            "common": [
+              {
+                "type": "attribute",
+                "field": "city",
+                "op": "in",
+                "values": [
+                  "İzmir",
+                  "Bursa"
+                ]
+              },
+              {
+                "type": "attribute",
+                "field": "age",
+                "op": "gte",
+                "value": 18
+              },
+              {
+                "type": "attribute",
+                "field": "age",
+                "op": "lte",
+                "value": 30
+              },
+              {
+                "type": "event",
+                "event": "product_view",
+                "occurred": true,
+                "within_days": 7,
+                "then": {
+                  "event": "add_to_cart",
+                  "occurred": true
+                }
+              }
+            ],
+            "groups": null,
+            "assumptions": [
+              "Ürün inceleme son 7 gün içinde aranıyor; sepete ekleme bu incelemeden sonra yapılmış olmalı.",
+              "18-30 yaş arası, sınırlar dahil olacak şekilde alındı."
+            ],
+            "unsupported": [],
+            "notes": [
+              "Mesaj içeriği: ücretsiz kargo."
+            ]
+          },
+          "summary": "şehri İzmir veya Bursa olan VE 18 yaş ve üzeri VE 30 yaş ve altı VE son 7 günde ürün incelemiş ve sonrasında sepete ürün eklemiş",
+          "repairs": 0,
+          "calls": 1,
+          "input_tokens": 3879,
+          "output_tokens": 369,
+          "duration": "4.184s"
+        },
+        {
+          "run": 2,
+          "status": "ok",
+          "correct": true,
+          "problems": null,
+          "audience_size": 12,
+          "extra": 0,
+          "missing": 0,
+          "rule": {
+            "status": "ok",
+            "audience_scope": "filtered",
+            "common": [
+              {
+                "type": "attribute",
+                "field": "city",
+                "op": "in",
+                "values": [
+                  "İzmir",
+                  "Bursa"
+                ]
+              },
+              {
+                "type": "attribute",
+                "field": "age",
+                "op": "gte",
+                "value": 18
+              },
+              {
+                "type": "attribute",
+                "field": "age",
+                "op": "lte",
+                "value": 30
+              },
+              {
+                "type": "event",
+                "event": "product_view",
+                "occurred": true,
+                "within_days": 7,
+                "then": {
+                  "event": "add_to_cart",
+                  "occurred": true
+                }
+              }
+            ],
+            "groups": null,
+            "assumptions": [
+              "İzmir ve Bursa tek bir şehir koşulu olarak yazıldı.",
+              "18-30 yaş aralığı iki sınır da dahil olacak şekilde alındı.",
+              "Son 7 günde ürün görüntüleyip bunun ardından sepete ekleyenler hedeflendi."
+            ],
+            "unsupported": [],
+            "notes": [
+              "Mesaj içeriği: ücretsiz kargo."
+            ]
+          },
+          "summary": "şehri İzmir veya Bursa olan VE 18 yaş ve üzeri VE 30 yaş ve altı VE son 7 günde ürün incelemiş ve sonrasında sepete ürün eklemiş",
+          "repairs": 0,
+          "calls": 1,
+          "input_tokens": 3879,
+          "output_tokens": 412,
+          "duration": "3.361s"
+        },
+        {
+          "run": 3,
+          "status": "ok",
+          "correct": false,
+          "problems": [
+            "kitle farklı: 22 fazla, 0 eksik kişi"
+          ],
+          "audience_size": 34,
+          "extra": 22,
+          "missing": 0,
+          "rule": {
+            "status": "ok",
+            "audience_scope": "filtered",
+            "common": [
+              {
+                "type": "attribute",
+                "field": "city",
+                "op": "in",
+                "values": [
+                  "İzmir",
+                  "Bursa"
+                ]
+              },
+              {
+                "type": "attribute",
+                "field": "age",
+                "op": "gte",
+                "value": 18
+              },
+              {
+                "type": "attribute",
+                "field": "age",
+                "op": "lte",
+                "value": 30
+              },
+              {
+                "type": "event",
+                "event": "product_view",
+                "occurred": true,
+                "within_days": 7
+              }
+            ],
+            "groups": null,
+            "assumptions": [
+              "İzmir ve Bursa tek bir şehir koşulu olarak alındı.",
+              "18-30 yaş arası: yaş \u003e= 18 ve \u003c= 30 (sınırlar dahil).",
+              "Ürün incelemeyi son 7 gün içinde yapıp sonrasında sepete ekleyenler, product_view koşulu ve then {add_to_cart, true} ile ifade edildi."
+            ],
+            "unsupported": [],
+            "notes": [
+              "Mesaj içeriği: ücretsiz kargo."
+            ]
+          },
+          "summary": "şehri İzmir veya Bursa olan VE 18 yaş ve üzeri VE 30 yaş ve altı VE son 7 günde ürün incelemiş",
+          "repairs": 0,
+          "calls": 1,
+          "input_tokens": 3879,
+          "output_tokens": 315,
+          "duration": "2.857s"
+        }
+      ]
+    }
+  ]
+}

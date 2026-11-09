@@ -64,6 +64,13 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - Sınır: "Altı" ile "üstü" simetrik değildir. Belirsiz bir durumda pazarlamacı, onay ekranındaki özetten sınırı görüp düzeltebilir.
 - **Güncelleme (2026-11-08, PLAN adım 13, kullanıcı kararı): Zaman ifadeleri.** Teklifi veya mesajı anlatan zaman ifadeleri ("hafta sonu kargo bedava", "bu hafta sonuna kadar %20 indirim") içeriktir: `notes`'a yazılır, kural `ok` kalır. Kampanyanın gönderim zamanı ("yarın sabah 10'da gönder") her zaman `unsupported`'a `scheduling` sebebiyle yazılır ve kural `partial` olur. Gönderim zamanı kitleyi değiştirmese de pazarlamacının zamanlamanın desteklenmediğini görmesi gerekir; D-PARTIAL onayıyla kampanya yine gönderilebilir.
   - Gerekçe: İlk eval'de model "hafta sonu kargo bedava"yı üç kez de gönderim zamanı sandı ve kuralı gereksiz yere `partial` yaptı. Gönderim zamanını ise bir kez `notes`'a yazıp kuralı `ok` bıraktı. Prompt'a iki örnekli bir ayrım eklendi; aynı iki brief'in yeniden çalıştırılmasında 6/6 doğru oldu.
+- **Güncelleme (2026-11-09, PLAN adım 14b, kullanıcı kararı): Sayı, kesin tarih ve sıra.** Olay koşuluna yeni alanlar eklendi; yeni koşul tipi yok, eski kurallar aynen geçerli.
+  - **Alanlar:** `min_count` ("en az N kez", 2–100, yalnızca "yaptı" ile, signup hariç); `from`/`to` (`within_days` yerine takvim aralığı, iki gün dahil, en fazla 366 gün, Türkiye saati UTC+3); `then` (`{event, occurred}`: "X yaptı, sonra Y yaptı/yapmadı"; Y, X'ten sonra şimdiye kadar aranır; `min_count` ile birlikte kullanılamaz, Y ≠ X).
+  - **SQL:** Sayı `(SELECT count(*) …) >= $n`, sıra `EXISTS (X … AND [NOT] EXISTS (Y, Y.zaman > X.zaman))`, tarih `occurred_at >= $başlangıç AND occurred_at < $ertesi_gün`. Değerler yine yalnızca parametredir.
+  - **Doğrulama:** Pencere tam olarak bir biçimde yazılır. Koşul anahtarı yeni alanları içerir; içermeseydi "aldı" ile "3 kez aldı" tekrar sayılıp biri silinir ve kitle genişlerdi. Çelişki kontrolü takvim aralıklarını kendi aralarında karşılaştırır; son N gün ile takvim aralığını karşılaştırmaz, çünkü `Validate` saati bilmez.
+  - **Yeni kural:** `unsupported` içinde `too_complex` varsa status `unsupported` olmalıdır. Model bir eval çalıştırmasında 6 gruptan birini atıp `partial` dönmüştü; sınırı aşan kural kısaltılmaz.
+  - **Kapsam dışı (kullanıcı kararı):** Tutar/harcama, sıralama, ürün/kategori ve "en fazla N kez". Bunlar ve üç olaylı sıra, iki olay arası süre sınırı, 366 günden uzun veya tekrarlayan tarihler `unsupported`'a yazılmaya devam eder.
+  - **Gerekçe:** Bu kriterler mevcut `user_events` verisiyle ifade edilebiliyor ve pazarlamacı için gerçek kampanyalara karşılık geliyor (sadakat, belirli dönem, sepet hatırlatma). Tek düz koşul yapısı korunduğu için şema, doğrulama ve derleyici küçük kaldı.
 
 ## D-PARTIAL: Kısmi kural onayı kilitler
 
@@ -87,6 +94,9 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Gerekçe:** DNF yapısıyla doğrudan ifade edilir; sıralı olay desteği gerektirmez.
 - **Alternatifler:** Sıralı yorum ("sepete ekledikten sonra satın alma yok"): iş anlamına daha yakın ama şemaya sıralı olay tipi ve daha karmaşık bir sorgu ekler.
 - **Sınırlar:** Pencere içinde önce satın alıp sonra sepete ekleyen kullanıcı kitle dışında kalır. Seed'e bu durum için bir kohort konur ve testte doğrulanır.
+- **Güncelleme (2026-11-09, PLAN adım 14b, kullanıcı kararı): Sıralı yoruma geçildi.** "Sepete ekleyip alışveriş yapmayan" artık `add_to_cart✓30g` ve sonrasında `purchase` yok olarak yorumlanır (`then`). Aynı kural genel olarak "X yapıp Y yapmayan / X'ten sonra Y yapan" kalıbına uygulanır; iki olaya ayrı pencere verilmişse koşullar bağımsız yazılır.
+  - **Gerekçe:** Sepet hatırlatmasının iş anlamı budur; önceki yorumun dışarıda bıraktığı "önce alıp sonra sepete ekleyen" kullanıcılar da hatırlatılması gereken kişilerdir. Sıralı olay desteği adım 14b'de eklendiği için alternatifteki maliyet ortadan kalktı.
+  - **Etkisi:** Eval seed'inde case brief kitlesi 146 → 173. Eski yorum testlerde ayrı bir kural olarak korunur ve iki yorumun farkı kohortlarla doğrulanır.
 
 ## D-LLM-OUT: Claude'dan yapılandırılmış çıktı
 
@@ -117,6 +127,10 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - Input 2742 token oldu (adım 1'de 1635). Artışın sebebi daha uzun system prompt. Output 201 token. İlk delta 2,9 sn sonra geldi (adım 1'de 7–8,5 sn); örneklem küçük olduğu için gecikme beklentisi değiştirilmedi.
   - **Alan sırası:** Model JSON anahtarlarını şemadaki sırayla değil, alfabetik sırayla üretti (`assumptions`, `audience_scope`, `common`, …). Adım 6'daki artımlı JSON çıkarıcı alan sırasına güvenmemeli; her alanı adına göre tanımalı.
   - `max_tokens=40` ile `max_tokens` döndü ve yarım metin geçersiz JSON'du. Adaptör bunu hata değil stop reason olarak döndürüyor; parse etmeme kararı `generate` içinde uygulanıyor.
+- **Güncelleme (2026-11-09, PLAN adım 14b): Zorunlu ama `null` olabilen alanlar.** Olay koşulunun `within_days`, `from`, `to`, `min_count` ve `then` alanları şemada zorunludur ve `null` alabilir; isteğe bağlı değildir.
+  - **Gerekçe:** API zorunlu alanları şemadaki sırayla, isteğe bağlı alanları onlardan sonra yazdırır. İsteğe bağlı sürümle yapılan eval'de model bir kez `then`'i unuttu (kitle 22 kişi genişledi) ve iki kez "son N gün"ü takvim tarihine çevirdi. Zorunlu alanlarla model her koşulda pencereye, sayıya ve sıraya açıkça karar verir; `within_days` önce gelir. Değişiklik sonrası tam eval 75/75.
+  - **Sınırlar:** Structured output limitleri dokümantasyondan doğrulandı: istek başına en fazla 24 isteğe bağlı alan ve 16 union (`anyOf` veya tip dizisi) alanı. Şema bu sınırların altında; yeni nullable alanlar eklenirken union sayısı kontrol edilmeli.
+  - **Bugünün tarihi:** "Ekim'de", "geçen ay" gibi ifadeler için bugünün tarihi (Türkiye saati) kullanıcı mesajına yazılır. Sistem prompt'u sabit kalır ve önbelleğe alınabilir. Eval, seed'in sabit "bugün"ünü geçer.
 
 ## D-LLM-RETRY: LLM hata ve onarım stratejisi
 
@@ -339,6 +353,10 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - **Onay kilidi:** Onay düğmesinin neden kapalı olduğu çubukta yazar. Kurallar backend'in kontrolleriyle aynıdır (`lib/approval.ts`); backend onayda hepsini yeniden kontrol eder.
   - **Yeniden yükleme:** Üretim id'si `sessionStorage`'da tutulur; sayfa yenilenirse yeni bir üretim başlatılmaz, sürmekte olanın olayları baştan dinlenir. Üretim kaydedilmeden biterse (`validated`), frontend mesajı `PUT /content` ile kaydeder.
   - **Sınırlar:** Önizlemede "en uzun isim" örneği yok, çünkü API kişisel veri olan bu değeri göndermez; en kötü durum yalnızca karakter sayısı olarak görünür. Kaydedilmemiş düzenlemede en kötü durum gösterilmez, kaydedince hesaplanır.
+- **Güncelleme (2026-11-09, PLAN adım 14a): Kampanya listesi ve taslak silme.** `/campaigns` sayfası kampanyaları en yeniden eskiye listeler (Tümü / Taslaklar / Gönderilenler). Satırlar kapalı gelir (id, durum, tarih, kanal sayıları); açılınca brief, kitle, kanallar, gönderim sayıları ve mesajlar gösterilir. Taslaklar iki adımlı onayla silinir.
+  - **API:** `GET /api/campaigns` (`before=<id>` ile sayfalama; araya yeni kampanya girse de sayfalar kaymaz) ve `DELETE /api/campaigns/{id}`. Liste iki sorgudur: kampanyalar ve sayfanın bütün gönderim sayıları tek `GROUP BY` ile.
+  - **Silme:** Tek bir `DELETE … WHERE status = 'draft'`. Onay satırı ilk adımda kilitlediği için aynı anda gelen onay ve silmeden yalnızca biri başarılı olur. Onaylanmış kampanya silinemez (`409`); gönderim kayıtları korunur.
+  - **Gerekçe:** Pazarlamacı gönderdiği kampanyalara geri dönebilmeli; terk edilen taslaklar listeyi kalabalıklaştırmamalı.
 
 ## D-COMPOSE: Tek komutla kurulum (D-2)
 
@@ -416,6 +434,7 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - **Maliyet kontrolü:** SDK retry'ı kapalıdır; her istek sayılır ve `-max-calls` bütçesini (varsayılan: çalıştırma × brief × 3, yani 2 onarımlı en kötü durum) aşan istek yapılmaz, eval durur. Geçici bir API hatası tekrar denenmez, raporda "API hatası" olarak ayrıca görünür. `make eval-dry` aynı akışı ideal yanıtlarla, API çağrısı yapmadan çalıştırır.
   - **Raporlar:** `eval/reports/<tarih>-<model>.md` (okunacak rapor) ve `.json` (her çalıştırmanın ham kuralı, token ve süre bilgisi). Kullanıcı id'leri rapora girmez, yalnızca kişi sayıları girer; bunu bir test doğrular. Raporlar repoda tutulur (kullanıcı kararı).
   - **Testler:** Puanlama, tutarlılık, SQL kontrolü ve rapor birim testleri; seed'li Postgres üzerinde ideal yanıtlarla 40/40, bilerek yanlış ve farklı yazılmış yanıtlarla doğru puanlama (aynı kitlenin iki grup olarak yazılması doğru, `age≤30` ve unutulan koşul yanlış, sebep hatası, çelişkinin onarımdan sonra `invalid` olması), bütçe ve veritabanı hatası testleri.
+- **Güncelleme (2026-11-09, PLAN adım 14b):** Test seti 25 brief'e çıktı (#21–25: sayı, tarih ve sıra kriterlerinin birleşimleri ve hâlâ desteklenmeyen tutar). #4, #6 ve #11'in beklentisi güncellendi. Sonuç: 75/75 doğru, 25/25 tutarlı (`eval/reports/2026-11-09T1416-claude-sonnet-5-5.md`). Ara ölçümler ve düzeltmeler PLAN adım 14b notundadır.
 
 ## D-LANG: Dil kuralı
 

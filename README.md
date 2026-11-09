@@ -81,8 +81,11 @@ flowchart LR
 
 1. **Kitle:** Claude brief'ten yapılandırılmış bir segment kuralı (JSON) üretir. Kural
    backend'de doğrulanır, parametreli SQL'e derlenir; arayüz kanal başına kişi sayısını
-   gösterir. Brief'te ifade edilemeyen kriterler (ör. "en az 3 sipariş") ayrıca listelenir
-   ve pazarlamacının açık onayını gerektirir.
+   gösterir. Kural şehir, yaş ve olaylardan (kayıt, ürün inceleme, sepete ekleme, alışveriş)
+   oluşur. Olay koşulları son N gün ya da takvim aralığıyla ("1-15 Ekim"), sayıyla ("en az 3
+   kez") ve sırayla ("sepete ekleyip sonrasında alışveriş yapmamış") yazılabilir. Brief'te
+   ifade edilemeyen kriterler (ör. "toplam harcaması 5000 TL'yi geçen") ayrıca listelenir ve
+   pazarlamacının açık onayını gerektirir.
 2. **İçerik:** SMS ve email metni ekrana akarak gelir. Karakter limitleri, değişkenler
    (`{{first_name}}`, `{{city}}`) kitledeki en uzun değerle doldurulmuş en kötü durum için
    kontrol edilir.
@@ -151,8 +154,8 @@ yanlışlıkla çalıştırılamaz.
 
 ### Model değerlendirmesi (eval)
 
-`docs/PLAN.md`'deki 20 brief'lik test seti (basit, karmaşık, belirsiz, desteklenmeyen ve
-saldırı içeren brief'ler) gerçek modelle çalıştırılır. Puanlama kuralın yapısıyla değil,
+`docs/PLAN.md`'deki 25 brief'lik test seti (basit, karmaşık, belirsiz, desteklenmeyen,
+saldırı içeren ve sayı/tarih/sıra kriterlerini birleştiren brief'ler) gerçek modelle çalıştırılır. Puanlama kuralın yapısıyla değil,
 sabit seed verisinde seçtiği kişi kümesinin beklenen kümeyle karşılaştırılmasıyla yapılır.
 Doğruluk ve tutarlılık (aynı brief'in çalıştırmalar arasında aynı sonucu vermesi) ayrı
 raporlanır.
@@ -160,76 +163,22 @@ raporlanır.
 ```bash
 make eval-dry                       # ideal yanıtlarla, API çağrısı yok (ücretsiz)
 make eval RUNS=1 CASES=1,4,7        # küçük deneme (ücretli)
-make eval                           # 20 brief × 3 çalıştırma (ücretli)
+make eval                           # 25 brief × 3 çalıştırma (ücretli)
 ```
 
 Eval API key gerektirir, çağrı bütçesini aşmaz ve raporu `eval/reports/` altına Markdown +
 JSON olarak yazar.
 
-**Son sonuç** (`claude-sonnet-5-5`, 60 çağrı, 2026-11-08): doğruluk **%93,3** (56/60),
-tutarlılık **%95** (19/20). Kitle bekleyen bütün çalıştırmalarda seçilen kişiler beklenenle
-birebir aynıydı; injection içeren brief üç kez de reddedildi. Rapor:
-[`eval/reports/2026-11-08T1443-claude-sonnet-5-5.md`](eval/reports/2026-11-08T1443-claude-sonnet-5-5.md)
+**Son sonuç** (`claude-sonnet-5-5`, 25 brief × 3, 2026-11-09): doğruluk **%100** (75/75),
+tutarlılık **%100** (25/25). İki çalıştırmada modelin ilk çıktısını backend doğrulaması
+reddetti ve tek onarım turunda düzeldi; API hatası olmadı. Rapor:
+[`eval/reports/2026-11-09T1416-claude-sonnet-5-5.md`](eval/reports/2026-11-09T1416-claude-sonnet-5-5.md)
 
-Dört hatanın dördü de zaman ifadelerinin (teklif mi, gönderim zamanı mı) sınıflandırmasıydı.
-Prompt düzeltmesinden sonra bu iki brief (#2, #13) üçer kez yeniden çalıştırıldı: 6/6 doğru
-([rapor](eval/reports/2026-11-08T1522-cases-2-13-claude-sonnet-5-5.md)). Tam eval düzeltmeden
-sonra tekrarlanmadı.
-
----
-
-## Yerel geliştirme
-
-Gerekenler: **Go 1.27**, **Node 26**, **Docker**, **make**.
-
-```bash
-make db-up              # yalnızca Postgres
-make seed               # migration + örnek veri (veri varsa atlar)
-make seed-reset         # tabloları silip baştan yükler
-
-cd backend
-go run ./cmd/api            # :8080
-go run ./cmd/mockprovider   # :8090
-go run ./cmd/worker         # :8081
-
-make frontend-dev       # Vite dev sunucusu :5173; /api istekleri :8080'e yönlenir
-```
-
-Yerelde çalışan binary'ler yapılandırmayı ortam değişkenlerinden veya `.env`'den okur.
-
-### Yapılandırma
-
-Bütün değişkenler isteğe bağlıdır; varsayılanlar ve açıklamalar için
-[`.env.example`](.env.example). Docker Compose `.env`'den yalnızca `LLM_*`, `ANTHROPIC_*`,
-`WORKER_*` ve `MOCK_*` değerlerini alır; servis adresleri compose dosyasında sabittir.
-
-| Değişken | Varsayılan | Açıklama |
-|---|---|---|
-| `LLM_PROVIDER` | `mock` | `mock` veya `anthropic` |
-| `LLM_MODEL` | `claude-sonnet-5-5` | Kullanılacak Claude modeli |
-| `ANTHROPIC_API_KEY` | — | `LLM_PROVIDER=anthropic` için gerekli |
-| `WORKER_SEND_RATE` | `95` | Kanal başına saniyede gönderim |
-| `WORKER_CONCURRENCY` | `8` | Kanal başına eşzamanlı gönderim |
-| `MOCK_ERROR_RATE` / `MOCK_429_RATE` | `0.05` / `0.03` | Mock provider'ın hata ve 429 oranları |
-| `MOCK_RATE_LIMIT` | `100` | Mock provider'ın saniyelik istek sınırı |
-
----
-
-## Proje yapısı
-
-```
-backend/
-  cmd/             api, worker, mockprovider, seed, eval
-  internal/        segment, content, llm, campaign, delivery, mockprovider,
-                   httpapi, seed, eval, platform
-  migrations/      SQL migration'ları (binary'ye gömülü)
-frontend/          Vue 3 + TypeScript uygulaması, nginx yapılandırması
-scripts/smoke.sh   make smoke
-eval/reports/      eval raporları
-docs/              CASE.md (gereksinimler), PLAN.md (uygulama planı, eval test seti)
-ai-sessions/       Claude Code oturum kayıtları
-DECISIONS.md       mimari kararlar ve gerekçeleri
-```
+Bu sonuca giden ara ölçümler de `eval/reports/`'ta duruyor: sayı, tarih ve sıra kriterleri
+eklendikten sonraki ilk tam eval 74/75, şema ve prompt düzeltmelerinden önceki ikinci tam
+eval 72/75 idi. Hatalar ve düzeltmeler `docs/PLAN.md` adım 14b notunda. 20 brief'lik
+önceki set için: [`2026-11-08T1443`](eval/reports/2026-11-08T1443-claude-sonnet-5-5.md)
+(56/60).
 
 ---
 
@@ -239,9 +188,13 @@ DECISIONS.md       mimari kararlar ve gerekçeleri
 - **Tek `api` ve tek `worker` replikası** varsayılır. Hız limiti süreç içidir; mesaj
   üretim akışları API'nin belleğinde tutulur. Ölçek büyürse dağıtık limiter veya broker
   gerekir.
-- **Desteklenmeyen kitle kriterleri:** sıra ("sepete ekledikten sonra"), sayı ve toplam
-  ("en az 3 sipariş"), sıralama ("en çok harcayan 500"), ürün/kategori detayı, kesin tarih
-  aralığı. Bunlar kurala girmez; pazarlamacıya açıkça listelenir.
+- **Desteklenmeyen kitle kriterleri:** tutar ve harcama ("toplam 5000 TL üzeri"), sıralama
+  ("en çok harcayan 500"), ürün/kategori detayı, üç veya daha fazla olayın sırası, iki olay
+  arasında süre sınırı ("ekledikten sonraki 2 gün içinde"), 366 günden uzun veya tekrarlayan
+  tarih aralıkları. Bunlar kurala girmez; pazarlamacıya açıkça listelenir.
+- **Sayı koşulu yalnızca "en az N kez"dir** (2–100); "en fazla N kez" yoktur.
+- **Takvim tarihleri Türkiye saatiyle** (UTC+3) yorumlanır. Yılı yazılmamış bir tarih
+  ("Ekim'de") geleceğe düşmeyen en yakın tarih olarak alınır ve varsayım olarak gösterilir.
 - **Tüm kitle aynı mesajı alır;** gruba özel içerik yok.
 - **SMS limiti karakter sayısıdır** (160). Türkçe karakter içeren gerçek bir SMS'te tek
   segment 70 karakterdir; bu fark uygulanmaz.
