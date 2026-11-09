@@ -18,7 +18,7 @@ type Demo struct {
 // NewDemo returns a Demo with a visible streaming speed.
 func NewDemo() *Demo { return &Demo{Delay: 25 * time.Millisecond} }
 
-const demoSegment = `{"assumptions":[],"audience_scope":"filtered","common":[{"field":"city","op":"in","type":"attribute","values":["İstanbul"]},{"event":"add_to_cart","occurred":true,"type":"event","within_days":30},{"event":"purchase","occurred":false,"type":"event","within_days":30}],"groups":[],"notes":["Demo modu: bu kural sabittir, brief'ten üretilmedi."],"status":"ok","unsupported":[]}`
+const demoSegment = `{"assumptions":[],"audience_scope":"filtered","common":[{"field":"city","op":"in","type":"attribute","values":["İstanbul"]},{"event":"add_to_cart","occurred":true,"then":{"event":"purchase","occurred":false},"type":"event","within_days":30}],"groups":[],"notes":["Demo modu: bu kural sabittir, brief'ten üretilmedi."],"status":"ok","unsupported":[]}`
 
 const demoContent = `{"email_body":"Merhaba {{first_name}},\n\nSepetine eklediğin ürünler hâlâ seni bekliyor. Bu hafta sonuna kadar SEPET10 koduyla tüm sepetinde %10 indirim seni bekliyor.\n\nKeyifli alışverişler!","email_subject":"{{first_name}}, sepetindeki ürünler seni bekliyor","sms":"Merhaba {{first_name}}! Sepetindeki ürünler seni bekliyor. SEPET10 koduyla %10 indirim bu hafta sonuna kadar geçerli."}`
 

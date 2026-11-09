@@ -20,8 +20,46 @@ func TestCompileAudience(t *testing.T) {
 		wantArgs []any
 	}{
 		{
-			name:    "case brief, SMS",
+			name:    "case brief as a sequence, SMS",
 			rule:    caseRule(),
+			channel: ChannelSMS,
+			wantSQL: "SELECT u.id FROM users u WHERE u.sms_opt_in AND (" +
+				"(u.city = ANY($1)) AND " +
+				"(" + existsEvent + "$2 AND e.occurred_at >= $3 AND " +
+				"NOT EXISTS (SELECT 1 FROM user_events f WHERE f.user_id = u.id AND f.event_type = $4 AND f.occurred_at > e.occurred_at))))",
+			wantArgs: []any{[]string{"İstanbul"}, "add_to_cart", daysAgo(30), "purchase"},
+		},
+		{
+			name:    "then occurred",
+			rule:    okRule([]Condition{seqEvent(EventProductView, 7, EventAddToCart, true)}),
+			channel: ChannelEmail,
+			wantSQL: "SELECT u.id FROM users u WHERE u.email_opt_in AND (" +
+				"(" + existsEvent + "$1 AND e.occurred_at >= $2 AND " +
+				"EXISTS (SELECT 1 FROM user_events f WHERE f.user_id = u.id AND f.event_type = $3 AND f.occurred_at > e.occurred_at))))",
+			wantArgs: []any{"product_view", daysAgo(7), "add_to_cart"},
+		},
+		{
+			name:    "at least 3 purchases in 90 days",
+			rule:    okRule([]Condition{countEvent(EventPurchase, 3, 90)}),
+			channel: ChannelSMS,
+			wantSQL: "SELECT u.id FROM users u WHERE u.sms_opt_in AND (" +
+				"((SELECT count(*) FROM user_events e WHERE e.user_id = u.id AND e.event_type = $1 AND e.occurred_at >= $2) >= $3))",
+			wantArgs: []any{"purchase", daysAgo(90), 3},
+		},
+		{
+			// Calendar days are Istanbul days: 1 October 00:00 +03:00 up to,
+			// not including, 16 October 00:00 +03:00.
+			name:    "calendar range, did not",
+			rule:    okRule([]Condition{dateEvent(EventProductView, false, "2026-10-01", "2026-10-15")}),
+			channel: ChannelSMS,
+			wantSQL: "SELECT u.id FROM users u WHERE u.sms_opt_in AND (" +
+				"(NOT " + existsEvent + "$1 AND e.occurred_at >= $2 AND e.occurred_at < $3)))",
+			wantArgs: []any{"product_view",
+				time.Date(2026, 10, 1, 0, 0, 0, 0, Istanbul), time.Date(2026, 10, 16, 0, 0, 0, 0, Istanbul)},
+		},
+		{
+			name:    "independent cart and purchase (D-CART), SMS",
+			rule:    cartNoPurchaseRule(),
 			channel: ChannelSMS,
 			wantSQL: "SELECT u.id FROM users u WHERE u.sms_opt_in AND (" +
 				"(u.city = ANY($1)) AND " +

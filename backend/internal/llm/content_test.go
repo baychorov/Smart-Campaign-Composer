@@ -268,7 +268,7 @@ func TestContentPromptHasNoPersonalData(t *testing.T) {
 func TestDemoClient(t *testing.T) {
 	d := &Demo{}
 	t.Run("segment", func(t *testing.T) {
-		res, err := ExtractSegment(context.Background(), d, caseBrief)
+		res, err := ExtractSegment(context.Background(), d, caseBrief, testToday)
 		if err != nil || !res.Validation.Approvable() {
 			t.Fatalf("demo rule rejected: %v %+v", err, res.Issues)
 		}

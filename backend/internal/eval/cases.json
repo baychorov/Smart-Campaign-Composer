@@ -30,8 +30,8 @@
     "rules": [
       {"common": [
         {"type": "attribute", "field": "city", "op": "in", "values": ["İstanbul"]},
-        {"type": "event", "event": "add_to_cart", "occurred": true, "within_days": 30},
-        {"type": "event", "event": "purchase", "occurred": false, "within_days": 30}
+        {"type": "event", "event": "add_to_cart", "occurred": true, "within_days": 30,
+         "then": {"event": "purchase", "occurred": false}}
       ]}
     ]
   },
@@ -54,8 +54,8 @@
     "status": ["ok"], "audience": "exact",
     "rules": [
       {"common": [
-        {"type": "event", "event": "product_view", "occurred": true, "within_days": 14},
-        {"type": "event", "event": "add_to_cart", "occurred": false, "within_days": 14},
+        {"type": "event", "event": "product_view", "occurred": true, "within_days": 14,
+         "then": {"event": "add_to_cart", "occurred": false}},
         {"type": "event", "event": "purchase", "occurred": false, "within_days": 90},
         {"type": "attribute", "field": "age", "op": "gte", "value": 18}
       ]}
@@ -97,15 +97,14 @@
     ]
   },
   {
-    "id": 11, "category": "Desteklenmeyen",
+    "id": 11, "category": "Sayı",
     "brief": "Son 90 günde en az 3 kez alışveriş yapan İzmirli kullanıcılara teşekkür mesajı.",
-    "status": ["partial"], "audience": "exact", "reasons": ["aggregate"],
+    "status": ["ok"], "audience": "exact",
     "rules": [
       {"common": [
         {"type": "attribute", "field": "city", "op": "in", "values": ["İzmir"]},
-        {"type": "event", "event": "purchase", "occurred": true, "within_days": 90}
-      ]},
-      {"common": [{"type": "attribute", "field": "city", "op": "in", "values": ["İzmir"]}]}
+        {"type": "event", "event": "purchase", "occurred": true, "within_days": 90, "min_count": 3}
+      ]}
     ]
   },
   {
@@ -205,6 +204,66 @@
     "status": ["ok"], "audience": "exact",
     "rules": [
       {"common": [{"type": "attribute", "field": "city", "op": "in", "values": ["İstanbul"]}]}
+    ]
+  },
+  {
+    "id": 21, "category": "Sayı + VEYA",
+    "brief": "Ankara'da yaşayan ve son 30 günde en az 2 kez sepete ürün eklemiş ya da son 60 günde en az 3 kez ürün incelemiş kullanıcılara hatırlatma gönder.",
+    "status": ["ok"], "audience": "exact",
+    "rules": [
+      {"common": [{"type": "attribute", "field": "city", "op": "in", "values": ["Ankara"]}],
+       "groups": [
+        {"conditions": [{"type": "event", "event": "add_to_cart", "occurred": true, "within_days": 30, "min_count": 2}]},
+        {"conditions": [{"type": "event", "event": "product_view", "occurred": true, "within_days": 60, "min_count": 3}]}
+      ]}
+    ]
+  },
+  {
+    "id": 22, "category": "Tarih + sıra",
+    "brief": "1-15 Ekim arasında ürün inceleyip sonrasında hiç alışveriş yapmamış 25 yaş ve üstü kullanıcılara özel teklif gönder.",
+    "status": ["ok"], "audience": "exact",
+    "rules": [
+      {"common": [
+        {"type": "attribute", "field": "age", "op": "gte", "value": 25},
+        {"type": "event", "event": "product_view", "occurred": true, "from": "2026-10-01", "to": "2026-10-15",
+         "then": {"event": "purchase", "occurred": false}}
+      ]}
+    ]
+  },
+  {
+    "id": 23, "category": "Tarih + sayı",
+    "brief": "Eylül ayında en az 2 kez alışveriş yapmış ama son 30 günde hiç alışveriş yapmamış kullanıcılara geri dönüş kampanyası.",
+    "status": ["ok"], "audience": "exact",
+    "rules": [
+      {"common": [
+        {"type": "event", "event": "purchase", "occurred": true, "from": "2026-09-01", "to": "2026-09-30", "min_count": 2},
+        {"type": "event", "event": "purchase", "occurred": false, "within_days": 30}
+      ]}
+    ]
+  },
+  {
+    "id": 24, "category": "Sıra",
+    "brief": "İzmir ve Bursa'da yaşayan 18-30 yaş arası kullanıcılardan son 7 günde ürün inceledikten sonra sepete ekleyenlere ücretsiz kargo mesajı.",
+    "status": ["ok"], "audience": "exact",
+    "rules": [
+      {"common": [
+        {"type": "attribute", "field": "city", "op": "in", "values": ["İzmir", "Bursa"]},
+        {"type": "attribute", "field": "age", "op": "gte", "value": 18},
+        {"type": "attribute", "field": "age", "op": "lte", "value": 30},
+        {"type": "event", "event": "product_view", "occurred": true, "within_days": 7,
+         "then": {"event": "add_to_cart", "occurred": true}}
+      ]}
+    ]
+  },
+  {
+    "id": 25, "category": "Sayı + desteklenmeyen",
+    "brief": "Son 90 günde en az 2 kez alışveriş yapmış ve toplam harcaması 5000 TL'yi geçen İstanbullu kullanıcılara VIP teşekkür mesajı.",
+    "status": ["partial"], "audience": "exact", "reasons": ["aggregate"],
+    "rules": [
+      {"common": [
+        {"type": "attribute", "field": "city", "op": "in", "values": ["İstanbul"]},
+        {"type": "event", "event": "purchase", "occurred": true, "within_days": 90, "min_count": 2}
+      ]}
     ]
   }
 ]

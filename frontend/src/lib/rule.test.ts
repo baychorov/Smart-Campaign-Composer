@@ -44,6 +44,14 @@ describe('rule edits', () => {
     expect(r.common[0]!.value).toBeUndefined()
   })
 
+  it('sets a count without touching the window', () => {
+    const r = caseRule()
+    r.common[1] = { type: 'event', event: 'purchase', occurred: true, within_days: 90, min_count: 3 }
+    const next = setNumber(r, { group: null, index: 1 }, 4, 'min_count')
+    expect(next.common[1]).toMatchObject({ min_count: 4, within_days: 90 })
+    expect(setNumber(r, { group: null, index: 1 }, 60, 'within_days').common[1]).toMatchObject({ min_count: 3, within_days: 60 })
+  })
+
   it('knows the last condition of a filtered rule', () => {
     expect(isLastCondition(caseRule())).toBe(false)
     const r = caseRule()

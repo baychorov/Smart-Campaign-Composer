@@ -51,6 +51,28 @@ describe('AudiencePanel', () => {
     expect((w.emitted('updateRule')![0]![0] as Rule).common[1]!.within_days).toBe(14)
   })
 
+  it('shows counts, calendar dates and event order; edits the count', async () => {
+    const r = caseRule()
+    r.common = [
+      { type: 'event', event: 'purchase', occurred: true, within_days: 90, min_count: 3 },
+      { type: 'event', event: 'product_view', occurred: true, from: '2026-10-01', to: '2026-10-15' },
+      { type: 'event', event: 'add_to_cart', occurred: true, within_days: 30, then: { event: 'purchase', occurred: false } },
+    ]
+    const w = mountPanel(makeCampaign({ rule: r }))
+    const rows = w.findAll('[data-test="common"] .cond')
+    expect(rows[0]!.text()).toContain('Alışveriş yaptı')
+    expect(rows[0]!.text()).toContain('en az')
+    expect(rows[1]!.get('[data-test="dates"]').text()).toBe('1 Ekim 2026 – 15 Ekim 2026')
+    expect(rows[1]!.find('input').exists()).toBe(false) // dates are not editable
+    expect(rows[2]!.get('[data-test="then"]').text()).toBe('Alışveriş yapmadı')
+
+    const count = w.get('#cond-c-0-count')
+    await count.setValue(5)
+    await count.trigger('change')
+    const sent = w.emitted('updateRule')![0]![0] as Rule
+    expect(sent.common[0]).toMatchObject({ min_count: 5, within_days: 90 })
+  })
+
   it('does not offer to remove the last condition', () => {
     const r = caseRule()
     r.common = [r.common[0]!]

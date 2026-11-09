@@ -17,8 +17,8 @@ func TestLoadCases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cases) != 20 {
-		t.Fatalf("%d cases, PLAN has 20", len(cases))
+	if len(cases) != 25 {
+		t.Fatalf("%d cases, PLAN has 25", len(cases))
 	}
 	for i, c := range cases {
 		if c.ID != i+1 {

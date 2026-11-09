@@ -63,12 +63,12 @@ func okRule(common []segment.Condition, groups ...segment.Group) segment.Rule {
 
 func TestExecuteIdealReplies(t *testing.T) {
 	cases, audience := setup(t)
-	results, err := Execute(t.Context(), cases, Options{Client: NewIdealClient(cases), Audience: audience, Runs: 2, Parallel: 4})
+	results, err := Execute(t.Context(), cases, Options{Client: NewIdealClient(cases), Audience: audience, Today: testNow, Runs: 2, Parallel: 4})
 	if err != nil {
 		t.Fatal(err)
 	}
 	tot := Summarize(results)
-	if tot.CorrectRuns != 40 || tot.ConsistentBriefs != 20 || tot.Unsafe != 0 {
+	if tot.CorrectRuns != 50 || tot.ConsistentBriefs != 25 || tot.Unsafe != 0 {
 		t.Errorf("ideal replies: %+v", tot)
 		for _, cr := range results {
 			for _, v := range cr.Verdicts {
@@ -87,9 +87,12 @@ func TestExecuteIdealReplies(t *testing.T) {
 			}
 		}
 	}
-	// D-CART case brief on the fixed seed (same count as the UI showed).
-	if n := len(results[3].Expected[0]); n != 146 {
-		t.Errorf("case brief audience %d, want 146", n)
+	// The case brief on the fixed seed. Read as "cart, then no purchase"
+	// (PLAN step 14b) it is 173 users; the earlier independent reading
+	// (D-CART) gave 146. The 27 more bought in the window and then added to
+	// the cart again.
+	if n := len(results[3].Expected[0]); n != 173 {
+		t.Errorf("case brief audience %d, want 173", n)
 	}
 }
 
@@ -137,7 +140,7 @@ func TestExecuteScoresWrongAnswers(t *testing.T) {
 		return "", false
 	}
 
-	results, err := Execute(t.Context(), cases, Options{Client: client, Audience: audience, Runs: 2, Parallel: 1})
+	results, err := Execute(t.Context(), cases, Options{Client: client, Audience: audience, Today: testNow, Runs: 2, Parallel: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +195,7 @@ func TestExecuteScoresWrongAnswers(t *testing.T) {
 func TestExecuteStopsAtBudget(t *testing.T) {
 	cases, audience := setup(t)
 	budget := &BudgetClient{Client: NewIdealClient(cases), Max: 5}
-	_, err := Execute(t.Context(), cases, Options{Client: budget, Audience: audience, Runs: 1, Parallel: 2})
+	_, err := Execute(t.Context(), cases, Options{Client: budget, Audience: audience, Today: testNow, Runs: 1, Parallel: 2})
 	if !errors.Is(err, ErrBudget) {
 		t.Fatalf("err = %v, want ErrBudget", err)
 	}
@@ -204,7 +207,7 @@ func TestExecuteStopsAtBudget(t *testing.T) {
 func TestExecuteFailsWithoutDatabase(t *testing.T) {
 	cases, _ := setup(t)
 	broken := func(context.Context, segment.Rule) ([]int64, error) { return nil, errors.New("db down") }
-	if _, err := Execute(t.Context(), cases, Options{Client: NewIdealClient(cases), Audience: broken, Runs: 1, Parallel: 1}); err == nil {
+	if _, err := Execute(t.Context(), cases, Options{Client: NewIdealClient(cases), Audience: broken, Today: testNow, Runs: 1, Parallel: 1}); err == nil {
 		t.Fatal("a database failure must abort the eval, not count as a wrong answer")
 	}
 }

@@ -10,7 +10,7 @@ import (
 
 const caseBrief = "İstanbul'da yaşayan, son 30 günde sepete ürün ekleyip alışveriş yapmayan kullanıcılara samimi bir dille %10 indirim kodu içeren hatırlatma gönder."
 
-// briefCase is one row of the 20-brief test set in docs/PLAN.md. reply is a
+// briefCase is one row of the 25-brief test set in docs/PLAN.md. reply is a
 // hand-written ideal model answer; want is the audience it must produce
 // after validation. These tests exercise the decode → validate chain, not
 // the model; model quality is measured by make eval.
@@ -69,18 +69,18 @@ func briefCases() []briefCase {
 			wantStatus: segment.StatusOK,
 			want:       segment.Rule{Status: segment.StatusOK, AudienceScope: segment.ScopeAll}},
 		{id: 4, brief: caseBrief,
-			reply: withNotes(ok(conds(city(in, "İstanbul"), event(cart, true, 30), event(buy, false, 30))),
+			reply: withNotes(ok(conds(city(in, "İstanbul"), thenEvent(event(cart, true, 30), buy, false))),
 				"Samimi bir dil istendi.", "Mesajda %10 indirim kodu olacak."),
 			wantStatus: segment.StatusOK,
-			want:       ok(conds(city(in, "İstanbul"), event(cart, true, 30), event(buy, false, 30)))},
+			want:       ok(conds(city(in, "İstanbul"), thenEvent(event(cart, true, 30), buy, false)))},
 		{id: 5, brief: "25-34 yaş arası, İstanbul dışında yaşayan ve son 60 günde hiç alışveriş yapmamış kullanıcılara geri dönüş kampanyası.",
 			reply:      ok(conds(age(gte, 25), age(lte, 34), city(notIn, "İstanbul"), event(buy, false, 60))),
 			wantStatus: segment.StatusOK,
 			want:       ok(conds(age(gte, 25), age(lte, 34), city(notIn, "İstanbul"), event(buy, false, 60)))},
 		{id: 6, brief: "Son 14 günde ürün inceleyip sepete eklememiş, son 90 günde de alışveriş yapmamış 18 yaş üstü kullanıcılar.",
-			reply:      ok(conds(event(view, true, 14), event(cart, false, 14), event(buy, false, 90), age(gte, 18))),
+			reply:      ok(conds(thenEvent(event(view, true, 14), cart, false), event(buy, false, 90), age(gte, 18))),
 			wantStatus: segment.StatusOK,
-			want:       ok(conds(event(view, true, 14), event(cart, false, 14), event(buy, false, 90), age(gte, 18)))},
+			want:       ok(conds(thenEvent(event(view, true, 14), cart, false), event(buy, false, 90), age(gte, 18)))},
 		{id: 7, brief: "istanbul ve IZMIR'de yaşayan 30 yaş altı kullanıcılara öğrenci indirimi.",
 			// The model echoes the brief's spelling; Validate normalises it.
 			reply:      ok(conds(city(in, "istanbul", "IZMIR"), age(lte, 29))),
@@ -102,11 +102,9 @@ func briefCases() []briefCase {
 			wantStatus: segment.StatusOK,
 			want:       ok(nil, group(city(in, "İstanbul")), group(event(cart, true, 7)))},
 		{id: 11, brief: "Son 90 günde en az 3 kez alışveriş yapan İzmirli kullanıcılara teşekkür mesajı.",
-			reply: withAssumptions(partial(ok(conds(city(in, "İzmir"), event(buy, true, 90))),
-				unsupported("en az 3 kez alışveriş", segment.ReasonAggregate)),
-				"Son 90 günde en az bir alışveriş koşulu korundu."),
-			wantStatus: segment.StatusPartial,
-			want:       ok(conds(city(in, "İzmir"), event(buy, true, 90)))},
+			reply:      ok(conds(city(in, "İzmir"), atLeast(event(buy, true, 90), 3))),
+			wantStatus: segment.StatusOK,
+			want:       ok(conds(city(in, "İzmir"), atLeast(event(buy, true, 90), 3)))},
 		{id: 12, brief: "iPhone kullanan VIP müşterilere özel teklif.",
 			reply: noAudience(segment.StatusUnsupported,
 				unsupported("iPhone kullanan", segment.ReasonUnknownField), unsupported("VIP müşteri", segment.ReasonUnknownField)),
@@ -156,18 +154,42 @@ func briefCases() []briefCase {
 			wantStatus: segment.StatusOK,
 			want:       ok(conds(city(in, "İstanbul"))),
 			wantWarn:   segment.CodeCoveredGroup},
+		{id: 21, brief: "Ankara'da yaşayan ve son 30 günde en az 2 kez sepete ürün eklemiş ya da son 60 günde en az 3 kez ürün incelemiş kullanıcılara hatırlatma gönder.",
+			reply: ok(conds(city(in, "Ankara")),
+				group(atLeast(event(cart, true, 30), 2)), group(atLeast(event(view, true, 60), 3))),
+			wantStatus: segment.StatusOK,
+			want: ok(conds(city(in, "Ankara")),
+				group(atLeast(event(cart, true, 30), 2)), group(atLeast(event(view, true, 60), 3)))},
+		{id: 22, brief: "1-15 Ekim arasında ürün inceleyip sonrasında hiç alışveriş yapmamış 25 yaş ve üstü kullanıcılara özel teklif gönder.",
+			reply: withAssumptions(ok(conds(age(gte, 25), thenEvent(between(view, true, "2026-10-01", "2026-10-15"), buy, false))),
+				"1-15 Ekim, 2026 yılı olarak yorumlandı."),
+			wantStatus: segment.StatusOK,
+			want:       ok(conds(age(gte, 25), thenEvent(between(view, true, "2026-10-01", "2026-10-15"), buy, false)))},
+		{id: 23, brief: "Eylül ayında en az 2 kez alışveriş yapmış ama son 30 günde hiç alışveriş yapmamış kullanıcılara geri dönüş kampanyası.",
+			reply:      ok(conds(atLeast(between(buy, true, "2026-09-01", "2026-09-30"), 2), event(buy, false, 30))),
+			wantStatus: segment.StatusOK,
+			want:       ok(conds(atLeast(between(buy, true, "2026-09-01", "2026-09-30"), 2), event(buy, false, 30)))},
+		{id: 24, brief: "İzmir ve Bursa'da yaşayan 18-30 yaş arası kullanıcılardan son 7 günde ürün inceledikten sonra sepete ekleyenlere ücretsiz kargo mesajı.",
+			reply:      ok(conds(city(in, "İzmir", "Bursa"), age(gte, 18), age(lte, 30), thenEvent(event(view, true, 7), cart, true))),
+			wantStatus: segment.StatusOK,
+			want:       ok(conds(city(in, "İzmir", "Bursa"), age(gte, 18), age(lte, 30), thenEvent(event(view, true, 7), cart, true)))},
+		{id: 25, brief: "Son 90 günde en az 2 kez alışveriş yapmış ve toplam harcaması 5000 TL'yi geçen İstanbullu kullanıcılara VIP teşekkür mesajı.",
+			reply: partial(ok(conds(city(in, "İstanbul"), atLeast(event(buy, true, 90), 2))),
+				unsupported("toplam harcaması 5000 TL'yi geçen", segment.ReasonAggregate)),
+			wantStatus: segment.StatusPartial,
+			want:       ok(conds(city(in, "İstanbul"), atLeast(event(buy, true, 90), 2)))},
 	}
 }
 
 func TestExtractSegmentBriefSet(t *testing.T) {
 	cases := briefCases()
-	if len(cases) != 20 {
-		t.Fatalf("brief set has %d cases, PLAN has 20", len(cases))
+	if len(cases) != 25 {
+		t.Fatalf("brief set has %d cases, PLAN has 25", len(cases))
 	}
 	for _, tc := range cases {
 		t.Run(fmt.Sprintf("brief%02d", tc.id), func(t *testing.T) {
 			fake := NewFake(Text(mustJSON(t, tc.reply)))
-			res, err := ExtractSegment(context.Background(), fake, tc.brief)
+			res, err := ExtractSegment(context.Background(), fake, tc.brief, testToday)
 			if err != nil {
 				t.Fatalf("#%d: %v (issues %v)", tc.id, err, res.Issues)
 			}

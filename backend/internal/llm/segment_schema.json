@@ -64,12 +64,29 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["type", "event", "occurred", "within_days"],
+          "required": ["type", "event", "occurred", "within_days", "from", "to", "min_count", "then"],
           "properties": {
             "type": {"const": "event"},
             "event": {"type": "string", "enum": ["signup", "product_view", "add_to_cart", "purchase"]},
             "occurred": {"type": "boolean"},
-            "within_days": {"type": "integer"}
+            "within_days": {"type": ["integer", "null"]},
+            "from": {"anyOf": [{"type": "string", "format": "date"}, {"type": "null"}]},
+            "to": {"anyOf": [{"type": "string", "format": "date"}, {"type": "null"}]},
+            "min_count": {"type": ["integer", "null"]},
+            "then": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["event", "occurred"],
+                  "properties": {
+                    "event": {"type": "string", "enum": ["signup", "product_view", "add_to_cart", "purchase"]},
+                    "occurred": {"type": "boolean"}
+                  }
+                },
+                {"type": "null"}
+              ]
+            }
           }
         }
       ]

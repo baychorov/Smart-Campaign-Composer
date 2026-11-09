@@ -3,6 +3,7 @@ package segment
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Summary is a Turkish, human-readable view of a rule, generated from the
@@ -73,16 +74,8 @@ func Describe(c Condition) string {
 		return fmt.Sprintf("%d yaş ve üzeri", *c.Value)
 	case c.Field == FieldAge && c.Op == OpLte && c.Value != nil:
 		return fmt.Sprintf("%d yaş ve altı", *c.Value)
-	case c.Type == KindEvent && c.Occurred != nil && c.WithinDays != nil:
-		phrases, ok := eventPhrases[c.Event]
-		if !ok {
-			break
-		}
-		phrase := phrases[0]
-		if !*c.Occurred {
-			phrase = phrases[1]
-		}
-		return fmt.Sprintf("son %d günde %s", *c.WithinDays, phrase)
+	case c.Type == KindEvent && c.Occurred != nil && (c.WithinDays != nil || c.From != ""):
+		return describeEvent(c)
 	}
 	return "geçersiz koşul"
 }
@@ -93,4 +86,54 @@ func joinOr(vs []string) string {
 		return strings.Join(vs, "")
 	}
 	return strings.Join(vs[:len(vs)-1], ", ") + " veya " + vs[len(vs)-1]
+}
+
+var monthsTR = [...]string{"Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+	"Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"}
+
+// describeEvent renders e.g. "son 90 günde en az 3 kez alışveriş yapmış",
+// "1 Ekim 2026 – 15 Ekim 2026 arasında ürün incelemiş" or "son 30 günde
+// sepete ürün eklemiş ve sonrasında alışveriş yapmamış".
+func describeEvent(c Condition) string {
+	phrases, ok := eventPhrases[c.Event]
+	if !ok {
+		return "geçersiz koşul"
+	}
+	phrase := phrases[0]
+	if !*c.Occurred {
+		phrase = phrases[1]
+	}
+	if c.MinCount != nil {
+		phrase = fmt.Sprintf("en az %d kez %s", *c.MinCount, phrase)
+	}
+	out := describeWindow(c) + " " + phrase
+	if c.Then != nil && c.Then.Occurred != nil {
+		if then, ok := eventPhrases[c.Then.Event]; ok {
+			p := then[0]
+			if !*c.Then.Occurred {
+				p = then[1]
+			}
+			out += " ve sonrasında " + p
+		}
+	}
+	return out
+}
+
+func describeWindow(c Condition) string {
+	if c.WithinDays != nil {
+		return fmt.Sprintf("son %d günde", *c.WithinDays)
+	}
+	from, errF := time.Parse(DateLayout, c.From)
+	to, errT := time.Parse(DateLayout, c.To)
+	if errF != nil || errT != nil {
+		return c.From + " – " + c.To + " arasında"
+	}
+	if from.Equal(to) {
+		return turkishDate(from) + " tarihinde"
+	}
+	return turkishDate(from) + " – " + turkishDate(to) + " arasında"
+}
+
+func turkishDate(t time.Time) string {
+	return fmt.Sprintf("%d %s %d", t.Day(), monthsTR[t.Month()-1], t.Year())
 }

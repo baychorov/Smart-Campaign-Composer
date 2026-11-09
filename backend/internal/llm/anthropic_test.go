@@ -394,7 +394,7 @@ func TestAnthropicEndToEnd(t *testing.T) {
 		sse(textStream("end_turn", `{"status":"ok","audience_scope":"filtered","common":[],"groups":[],"assumptions":[],"unsupported":[],"notes":[]}`)...),
 		sse(textStream("end_turn", goodIstanbul[:40], goodIstanbul[40:])...),
 	)
-	res, err := ExtractSegment(context.Background(), newTestAdapter(srv.URL, 0), briefIstanbul)
+	res, err := ExtractSegment(context.Background(), newTestAdapter(srv.URL, 0), briefIstanbul, testToday)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -23,6 +23,9 @@ func (v *validator) normalizeEnums(r *Rule) {
 		c.Field = Field(fold(string(c.Field)))
 		c.Op = Op(fold(string(c.Op)))
 		c.Event = EventType(fold(string(c.Event)))
+		if c.Then != nil {
+			c.Then.Event = EventType(fold(string(c.Then.Event)))
+		}
 	}
 
 	r.Status = Status(fold(string(r.Status)))
@@ -166,7 +169,8 @@ func conditionKey(c Condition) string {
 	values := slices.Clone(c.Values)
 	slices.Sort(values)
 	parts := []string{string(c.Type), string(c.Field), string(c.Op), strings.Join(values, "\x1f"), string(c.Event)}
-	for _, p := range []*int{c.Value, c.WithinDays} {
+	parts = append(parts, c.From, c.To)
+	for _, p := range []*int{c.Value, c.WithinDays, c.MinCount} {
 		if p == nil {
 			parts = append(parts, "-")
 		} else {
@@ -175,6 +179,12 @@ func conditionKey(c Condition) string {
 	}
 	if c.Occurred != nil {
 		parts = append(parts, strconv.FormatBool(*c.Occurred))
+	}
+	// Every field that changes the meaning must be in the key: a key that
+	// ignored MinCount would treat "bought" and "bought 3 times" as the
+	// same condition and drop one of them, widening the audience.
+	if c.Then != nil && c.Then.Occurred != nil {
+		parts = append(parts, "then", string(c.Then.Event), strconv.FormatBool(*c.Then.Occurred))
 	}
 	return strings.Join(parts, "|")
 }

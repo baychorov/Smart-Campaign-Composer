@@ -41,37 +41,64 @@ func TestSeedCitiesAreProvinces(t *testing.T) {
 	}
 }
 
+// The case brief under both readings. The sequence reading (caseRule)
+// differs from the independent one (D-CART) only for users who added to
+// the cart after a purchase in the window.
 func TestCaseBriefCohorts(t *testing.T) {
 	pool, _ := seededDB(t)
-
-	sms := audience(t, pool, caseRule(), ChannelSMS)
-	email := audience(t, pool, caseRule(), ChannelEmail)
 	emailOf := emailsByID(t, pool)
 
-	tests := []struct {
-		cohort     string
-		sms, email bool
-	}{
-		{seed.CohortCaseTarget, true, true},
-		{seed.CohortCaseOldPurchase, true, true},
-		{seed.CohortCaseWindowInside, true, true},
-		{seed.CohortCaseEmailOnly, false, true},
-		{seed.CohortCaseNoConsent, false, false},
-		{seed.CohortCasePurchaseThenCart, false, false}, // D-CART edge case
-		{seed.CohortCaseCartThenPurchase, false, false},
-		{seed.CohortCaseWindowOutside, false, false},
-		{seed.CohortCaseOtherCity, false, false},
+	type want struct{ seq, independent bool } // in the SMS audience
+	cohorts := map[string]want{
+		seed.CohortCaseTarget:           {true, true},
+		seed.CohortCaseOldPurchase:      {true, true},
+		seed.CohortCaseWindowInside:     {true, true},
+		seed.CohortCaseEmailOnly:        {false, false}, // no SMS consent
+		seed.CohortCaseNoConsent:        {false, false},
+		seed.CohortCasePurchaseThenCart: {true, false},
+		seed.CohortCaseCartBuyCart:      {true, false},
+		seed.CohortCaseCartThenPurchase: {false, false},
+		seed.CohortCaseWindowOutside:    {false, false},
+		seed.CohortCaseOtherCity:        {false, false},
 	}
-	for _, tt := range tests {
-		t.Run(tt.cohort, func(t *testing.T) {
-			id := emailOf[seed.CohortEmail(tt.cohort)]
-			if got := slices.Contains(sms, id); got != tt.sms {
-				t.Errorf("in SMS audience = %v, want %v", got, tt.sms)
+	seqSMS := audience(t, pool, caseRule(), ChannelSMS)
+	indSMS := audience(t, pool, cartNoPurchaseRule(), ChannelSMS)
+	seqEmail := audience(t, pool, caseRule(), ChannelEmail)
+	for cohort, w := range cohorts {
+		t.Run(cohort, func(t *testing.T) {
+			id := emailOf[seed.CohortEmail(cohort)]
+			if got := slices.Contains(seqSMS, id); got != w.seq {
+				t.Errorf("in sequence audience = %v, want %v", got, w.seq)
 			}
-			if got := slices.Contains(email, id); got != tt.email {
-				t.Errorf("in email audience = %v, want %v", got, tt.email)
+			if got := slices.Contains(indSMS, id); got != w.independent {
+				t.Errorf("in independent audience = %v, want %v", got, w.independent)
 			}
 		})
+	}
+	if id := emailOf[seed.CohortEmail(seed.CohortCaseEmailOnly)]; !slices.Contains(seqEmail, id) {
+		t.Error("email-only cohort missing from the email audience")
+	}
+	// Every independent match is a sequence match: with no purchase in the
+	// window, no purchase can follow the cart add.
+	for _, id := range indSMS {
+		if !slices.Contains(seqSMS, id) {
+			t.Fatalf("user %d matches the independent reading but not the sequence", id)
+		}
+	}
+}
+
+func TestPurchaseCountCohorts(t *testing.T) {
+	pool, _ := seededDB(t)
+	emailOf := emailsByID(t, pool)
+
+	// Brief 11: İzmir, at least 3 purchases in the last 90 days.
+	got := audience(t, pool, okRule([]Condition{city(OpIn, "İzmir"), countEvent(EventPurchase, 3, 90)}), ChannelSMS)
+	for cohort, want := range map[string]bool{
+		seed.CohortBuys2: false, seed.CohortBuys3: true, seed.CohortBuys3Late: false,
+	} {
+		if in := slices.Contains(got, emailOf[seed.CohortEmail(cohort)]); in != want {
+			t.Errorf("%s in audience = %v, want %v", cohort, in, want)
+		}
 	}
 }
 
@@ -261,9 +288,37 @@ func (ref *reference) matches(c Condition, u seed.User) bool {
 	case c.Field == FieldAge && c.Op == OpLte:
 		return u.Age <= *c.Value
 	case c.Type == KindEvent:
-		since := testNow.Add(-time.Duration(*c.WithinDays) * 24 * time.Hour)
-		found := slices.ContainsFunc(ref.events[u.ID][string(c.Event)], func(at time.Time) bool { return !at.Before(since) })
-		return found == *c.Occurred
+		// Written independently of compile.go: count the matching events
+		// in the window, then look for a Then event after one of them.
+		inWindow := func(at time.Time) bool {
+			if c.WithinDays != nil {
+				return !at.Before(testNow.Add(-time.Duration(*c.WithinDays) * 24 * time.Hour))
+			}
+			day := at.In(Istanbul).Format(DateLayout) // calendar day in Turkey
+			return day >= c.From && day <= c.To
+		}
+		var hits []time.Time
+		for _, at := range ref.events[u.ID][string(c.Event)] {
+			if inWindow(at) {
+				hits = append(hits, at)
+			}
+		}
+		if !*c.Occurred {
+			return len(hits) == 0
+		}
+		if c.MinCount != nil {
+			return len(hits) >= *c.MinCount
+		}
+		if c.Then == nil {
+			return len(hits) > 0
+		}
+		for _, at := range hits {
+			after := slices.ContainsFunc(ref.events[u.ID][string(c.Then.Event)], func(t time.Time) bool { return t.After(at) })
+			if after == *c.Then.Occurred {
+				return true
+			}
+		}
+		return false
 	}
 	panic("reference: unknown condition")
 }

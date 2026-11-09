@@ -50,3 +50,8 @@ export function audienceSentence(s: Summary): string {
   if (s.groups?.length) parts.push(s.groups.map((g) => `(${g.join(', ')})`).join(' veya '))
   return `Kanal izni olan, ${parts.join('; ayrıca ')} kullanıcılar.`
 }
+
+/** A calendar day "2026-10-01" as "1 Ekim 2026". The day is not shifted by the viewer's time zone. */
+export function formatDay(day: string): string {
+  return new Date(day + 'T00:00:00Z').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+}

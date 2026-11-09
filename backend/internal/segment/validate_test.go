@@ -25,7 +25,7 @@ func TestValidate(t *testing.T) {
 		check     func(t *testing.T, r Rule) // optional check of the normalised rule
 	}{
 		// --- valid rules -------------------------------------------------
-		{name: "case brief (D-CART)", rule: caseRule()},
+		{name: "independent cart and purchase (D-CART)", rule: cartNoPurchaseRule()},
 		{
 			name: "all users",
 			rule: Rule{Status: StatusOK, AudienceScope: ScopeAll},

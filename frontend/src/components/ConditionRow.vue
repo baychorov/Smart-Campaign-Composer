@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
 import type { Condition } from '../api/types'
-import { EVENT_LABELS } from '../lib/labels'
+import { EVENT_LABELS, formatDay } from '../lib/labels'
+import type { NumberField as Field } from '../lib/rule'
+import NumberField from './NumberField.vue'
 
 // One condition as an editable chip: cities can be removed one by one,
-// ages and day windows can be changed, the whole condition can be removed.
+// ages, day windows and counts can be changed, the whole condition can be
+// removed. Calendar dates and the order of events are shown, not edited.
 
-const props = defineProps<{
+defineProps<{
   condition: Condition
-  /** Stable id prefix for the number input. */
+  /** Stable id prefix for the number inputs. */
   inputId: string
   editable: boolean
   /** False when this is the rule's last condition (an empty rule is invalid). */
@@ -18,23 +20,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   remove: []
   removeValue: [index: number]
-  setNumber: [n: number]
+  setNumber: [field: Field, n: number]
 }>()
-
-const numberValue = () => (props.condition.type === 'event' ? props.condition.within_days : props.condition.value) ?? 0
-// A local copy, so typing does not send a request per keystroke; the change
-// is sent on blur or Enter.
-const local = ref(numberValue())
-watch(() => numberValue(), (n) => (local.value = n))
-
-function commit() {
-  const n = Math.round(Number(local.value))
-  if (!Number.isFinite(n) || n === numberValue()) {
-    local.value = numberValue()
-    return
-  }
-  emit('setNumber', n)
-}
 </script>
 
 <template>
@@ -56,35 +43,53 @@ function commit() {
 
     <template v-else-if="condition.field === 'age'">
       <span class="key">Yaş</span>
-      <input
+      <NumberField
         :id="inputId"
-        v-model.number="local"
-        type="number"
-        min="13"
-        max="100"
+        :value="condition.value ?? 0"
+        :min="13"
+        :max="100"
         :disabled="!editable"
-        aria-label="Yaş sınırı"
-        @change="commit"
-        @keydown.enter.prevent="commit"
+        label="Yaş sınırı"
+        @commit="(n) => emit('setNumber', 'value', n)"
       />
       <span class="op">{{ condition.op === 'gte' ? 've üzeri' : 've altı' }}</span>
     </template>
 
     <template v-else-if="condition.event">
       <span class="key">{{ EVENT_LABELS[condition.event][condition.occurred ? 0 : 1] }}</span>
-      <span class="op">son</span>
-      <input
-        :id="inputId"
-        v-model.number="local"
-        type="number"
-        min="1"
-        max="365"
-        :disabled="!editable"
-        aria-label="Gün sayısı"
-        @change="commit"
-        @keydown.enter.prevent="commit"
-      />
-      <span class="op">gün</span>
+      <template v-if="condition.min_count">
+        <span class="op">en az</span>
+        <NumberField
+          :id="inputId + '-count'"
+          :value="condition.min_count"
+          :min="2"
+          :max="100"
+          :disabled="!editable"
+          label="En az kaç kez"
+          @commit="(n) => emit('setNumber', 'min_count', n)"
+        />
+        <span class="op">kez,</span>
+      </template>
+      <template v-if="condition.within_days !== undefined">
+        <span class="op">son</span>
+        <NumberField
+          :id="inputId"
+          :value="condition.within_days"
+          :min="1"
+          :max="365"
+          :disabled="!editable"
+          label="Gün sayısı"
+          @commit="(n) => emit('setNumber', 'within_days', n)"
+        />
+        <span class="op">gün</span>
+      </template>
+      <span v-else-if="condition.from && condition.to" class="token dates" data-test="dates">
+        {{ condition.from === condition.to ? formatDay(condition.from) : `${formatDay(condition.from)} – ${formatDay(condition.to)}` }}
+      </span>
+      <template v-if="condition.then">
+        <span class="op">→ sonra</span>
+        <span class="key then" data-test="then">{{ EVENT_LABELS[condition.then.event][condition.then.occurred ? 0 : 1] }}</span>
+      </template>
     </template>
 
     <button
@@ -139,18 +144,11 @@ function commit() {
 .token-x:hover {
   color: var(--bad);
 }
-input {
-  width: 64px;
-  padding: 2px 6px;
-  border: 1px solid var(--line-strong);
-  border-radius: 5px;
-  background: var(--surface);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+.dates {
+  padding: 0 8px;
 }
-input:focus {
-  outline: none;
-  border-color: var(--accent);
+.then {
+  font-weight: 400;
 }
 .remove {
   margin-left: auto;

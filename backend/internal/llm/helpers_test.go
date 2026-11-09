@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/segment"
 )
@@ -20,6 +21,21 @@ func age(op segment.Op, v int) segment.Condition {
 
 func event(ev segment.EventType, occurred bool, days int) segment.Condition {
 	return segment.Condition{Type: segment.KindEvent, Event: ev, Occurred: ptr(occurred), WithinDays: ptr(days)}
+}
+
+// thenEvent: "ev in the window, then (not) next".
+func thenEvent(c segment.Condition, next segment.EventType, occurred bool) segment.Condition {
+	c.Then = &segment.Then{Event: next, Occurred: ptr(occurred)}
+	return c
+}
+
+func atLeast(c segment.Condition, n int) segment.Condition {
+	c.MinCount = ptr(n)
+	return c
+}
+
+func between(ev segment.EventType, occurred bool, from, to string) segment.Condition {
+	return segment.Condition{Type: segment.KindEvent, Event: ev, Occurred: ptr(occurred), From: from, To: to}
 }
 
 func group(cs ...segment.Condition) segment.Group { return segment.Group{Conditions: cs} }
@@ -84,3 +100,6 @@ func hasCode(issues []segment.Issue, code string) bool {
 	}
 	return false
 }
+
+// testToday is the date segment prompts are built with in tests.
+var testToday = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)

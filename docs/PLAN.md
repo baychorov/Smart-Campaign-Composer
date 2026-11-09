@@ -24,10 +24,10 @@ Bir adım bitince durumu güncellenir ve kısa bir not düşülür.
 | 10 | Gözlemlenebilirlik | `/metrics`, `/healthz`, `/readyz`, dashboard SSE akışı | R-OBS-1..3 | ✅ |
 | 11 | Frontend | Brief formu → kural kartları ve sayılar → içerik akışı ve düzenleme → onay (kanal checkbox'ları, `partial` onayı) → dashboard | Bölüm 3 | ✅ |
 | 12 | Uçtan uca | `docker compose up` ile tek komutta kurulum; `make test` (katman 1–4 + frontend) ve `make test-unit` hedefleri | D-2, D-3 | ✅ |
-| 13 | Eval | `make eval`: 20 brief × 3 çalıştırma, doğruluk ve tutarlılık raporu | R-AI-1 | ✅ |
+| 13 | Eval | `make eval`: 20 brief × 3 çalıştırma (adım 14b'de 25 brief), doğruluk ve tutarlılık raporu | R-AI-1 | ✅ |
 | 14 | Teslim | README (kurulum ve mimari özeti), DECISIONS son hali, yetişmeyenlerin listesi, `ai-sessions/` export'ları (API key ve kişisel bilgiler temizlenmiş) | D-1, D-4..6 | 🔄 |
 | 14a | Kampanya listesi | `GET /api/campaigns` (en yeni önce, `id` ile sayfalama, Tümü / Taslak / Gönderilen filtresi, kanal başına gönderim sayıları) ve `DELETE /api/campaigns/{id}` (yalnızca taslak, atomik). Arayüzde `/campaigns` sayfası: satırlar kapalı gelir (id, durum, tarih, kanal sayıları); tıklanınca brief, kitle özeti, kişi sayıları, kanallar ve mesajlarla birlikte kampanya özeti açılır. Taslak silme onaylı iki adımla yapılır | Bölüm 3 | ✅ |
-| 14b | Yeni kitle kriterleri | Sayı ("son 90 günde en az 3 kez alışveriş"), kesin tarih aralığı ve sıra ("sepete ekledikten sonra almamış"). Segment şeması, doğrulama, normalizasyon, derleyici, özet, prompt, eval test seti ve arayüz. Tutar, sıralama ve ürün/kategori kapsam dışı (kullanıcı kararı) | R-AUD-1, R-AI-1 | ⏳ |
+| 14b | Yeni kitle kriterleri | Sayı ("son 90 günde en az 3 kez alışveriş"), kesin tarih aralığı ve sıra ("sepete ekledikten sonra almamış"). Segment şeması, doğrulama, normalizasyon, derleyici, özet, prompt, eval test seti ve arayüz. Tutar, sıralama ve ürün/kategori kapsam dışı (kullanıcı kararı) | R-AUD-1, R-AI-1 | ✅ |
 | 15 | Bonus (opsiyonel) | Zamanlanmış gönderim, A/B, dile göre içerik, CI | Bölüm 9 | ⏳ |
 
 **Kaba takvim:**
@@ -42,7 +42,7 @@ Bir adım bitince durumu güncellenir ve kısa bir not düşülür.
 | G6 | 11–12 |
 | G7 | 13–14 |
 
-## Test seti (20 brief)
+## Test seti (25 brief)
 
 **Varsayılan veri kataloğu:**
 - **Kullanıcı alanları:** `city`, `age`
@@ -52,6 +52,9 @@ Bir adım bitince durumu güncellenir ve kısa bir not düşülür.
 - `city∈[…]` / `city∉[…]`: şehir listede / listede değil
 - `X✓Ng`: X olayı son N günde var
 - `X✗Ng`: X olayı son N günde yok
+- `X✓≥kNg`: X olayı son N günde en az k kez var
+- `X✓[a…b]`: X olayı a ile b tarihleri arasında var (iki gün dahil)
+- `X✓Ng→Y✗`: X olayı son N günde var ve ondan sonra Y yok (`→Y✓`: sonra Y var)
 - `C:` ortak koşullar (`common`), `G1`, `G2`: gruplar
 
 Puanlama, kuralın seed'de döndürdüğü kullanıcı kümesiyle yapılır (bkz. D-TEST).
@@ -61,14 +64,14 @@ Puanlama, kuralın seed'de döndürdüğü kullanıcı kümesiyle yapılır (bkz
 | 1 | Basit | "İstanbul'daki kullanıcılara yeni sezon duyurusu gönder." | `ok` · C: `city∈[İstanbul]` |
 | 2 | Basit | "Ankara ve İzmir'deki kullanıcılara hafta sonu kargo bedava mesajı at." | `ok` · C: `city∈[Ankara, İzmir]` (tek koşul) |
 | 3 | Basit | "Tüm kullanıcılarımıza yeni yıl kutlaması gönder." | `ok` · `audience_scope: all`, koşul yok |
-| 4 | Karmaşık | Case'teki örnek brief | `ok` · C: `city∈[İstanbul]`, `add_to_cart✓30g`, `purchase✗30g`. Ton ve indirim `unsupported`'a girmez |
+| 4 | Karmaşık | Case'teki örnek brief | `ok` · C: `city∈[İstanbul]`, `add_to_cart✓30g→purchase✗` (sıralı yorum, adım 14b). Ton ve indirim `unsupported`'a girmez |
 | 5 | Karmaşık | "25-34 yaş arası, İstanbul dışında yaşayan ve son 60 günde hiç alışveriş yapmamış kullanıcılara geri dönüş kampanyası." | `ok` · C: `age≥25`, `age≤34`, `city∉[İstanbul]`, `purchase✗60g` |
-| 6 | Karmaşık | "Son 14 günde ürün inceleyip sepete eklememiş, son 90 günde de alışveriş yapmamış 18 yaş üstü kullanıcılar." | `ok` · C: `product_view✓14g`, `add_to_cart✗14g`, `purchase✗90g`, `age≥18` |
+| 6 | Karmaşık | "Son 14 günde ürün inceleyip sepete eklememiş, son 90 günde de alışveriş yapmamış 18 yaş üstü kullanıcılar." | `ok` · C: `product_view✓14g→add_to_cart✗`, `purchase✗90g`, `age≥18` |
 | 7 | Karmaşık | "istanbul ve IZMIR'de yaşayan 30 yaş altı kullanıcılara öğrenci indirimi." | `ok` · C: `city∈[İstanbul, İzmir]` (normalize edilmiş), `age≤29` |
 | 8 | Belirsiz | "Uzun süredir alışveriş yapmayan sadık müşterilerimizi geri kazanalım." | `partial` · "uzun süredir" bir varsayımla `assumptions`'a yazılır (ör. `purchase✗90g`); "sadık" → `unknown_field` |
 | 9 | Çelişkili | "Son 30 günde alışveriş yapmış ama son 30 günde hiç alışveriş yapmamış kullanıcılar." | Onaylanabilir bir kural çıkmaz: `unsupported/contradiction` ya da backend çelişkiyi yakalar |
 | 10 | VEYA | "İstanbul'da yaşayanlara veya son 7 günde sepete ürün ekleyenlere hatırlatma." | `ok` · G1: `city∈[İstanbul]` ∨ G2: `add_to_cart✓7g` |
-| 11 | Desteklenmeyen | "Son 90 günde en az 3 kez alışveriş yapan İzmirli kullanıcılara teşekkür mesajı." | `partial` · C: `city∈[İzmir]` (isteğe bağlı daha gevşek `purchase✓90g`); `aggregate` |
+| 11 | Sayı | "Son 90 günde en az 3 kez alışveriş yapan İzmirli kullanıcılara teşekkür mesajı." | `ok` · C: `city∈[İzmir]`, `purchase✓≥3 90g` (adım 14b öncesi: `partial/aggregate`) |
 | 12 | Desteklenmeyen | "iPhone kullanan VIP müşterilere özel teklif." | `unsupported/unknown_field`, koşul yok |
 | 13 | Kitle dışı | "Son 30 günde alışveriş yapan Bursalılara yarın sabah 10'da sadece SMS ile gönder." | `partial` · C: `city∈[Bursa]`, `purchase✓30g`; `scheduling` `unsupported`'a, "sadece SMS" `notes`'a yazılır |
 | 14 | Alakasız | "Bana Python'da bir sıralama algoritması yaz." | `rejected/off_topic` |
@@ -78,6 +81,11 @@ Puanlama, kuralın seed'de döndürdüğü kullanıcı kümesiyle yapılır (bkz
 | 18 | Açılım | "İstanbul'da yaşayan veya son 7 günde sepete ekleyen; ayrıca 25 yaş altı veya son 30 günde alışveriş yapmamış kullanıcılar." | `ok` · (A∨B)∧(C∨D) yapısı → 4 grup |
 | 19 | Sınır | Farklı yaş koşuluyla 6 ayrı şehir grubu | `unsupported/too_complex` (en fazla 5 grup) |
 | 20 | Kapsama | "Tüm İstanbul kullanıcılarına ve özellikle İstanbul'daki 25 yaş altına…" | `ok` + kapsama uyarısı · sonuç C: `city∈[İstanbul]`'a sadeleşir |
+| 21 | Sayı + VEYA | "Ankara'da yaşayan ve son 30 günde en az 2 kez sepete ürün eklemiş ya da son 60 günde en az 3 kez ürün incelemiş kullanıcılara hatırlatma gönder." | `ok` · C: `city∈[Ankara]`; G1: `add_to_cart✓≥2 30g` ∨ G2: `product_view✓≥3 60g` |
+| 22 | Tarih + sıra | "1-15 Ekim arasında ürün inceleyip sonrasında hiç alışveriş yapmamış 25 yaş ve üstü kullanıcılara özel teklif gönder." | `ok` · C: `age≥25`, `product_view✓[2026-10-01…2026-10-15]→purchase✗` (eval'in "bugün"ü 2026-11-01) |
+| 23 | Tarih + sayı | "Eylül ayında en az 2 kez alışveriş yapmış ama son 30 günde hiç alışveriş yapmamış kullanıcılara geri dönüş kampanyası." | `ok` · C: `purchase✓≥2 [2026-09-01…2026-09-30]`, `purchase✗30g` |
+| 24 | Sıra | "İzmir ve Bursa'da yaşayan 18-30 yaş arası kullanıcılardan son 7 günde ürün inceledikten sonra sepete ekleyenlere ücretsiz kargo mesajı." | `ok` · C: `city∈[İzmir, Bursa]`, `age≥18`, `age≤30`, `product_view✓7g→add_to_cart✓` |
+| 25 | Sayı + desteklenmeyen | "Son 90 günde en az 2 kez alışveriş yapmış ve toplam harcaması 5000 TL'yi geçen İstanbullu kullanıcılara VIP teşekkür mesajı." | `partial` · C: `city∈[İstanbul]`, `purchase✓≥2 90g`; tutar `aggregate` olarak `unsupported`'a |
 
 `make test` her brief için mock LLM'e elle yazılmış bir ideal yanıt verir. Bunlara bilerek bozulmuş yanıtlar da eklenir: status kurallarına aykırı çıktı, `audience_scope: filtered` ile boş kural, tek gruplu `groups`, büyük harfli enum, çelişki. Bu testler modeli değil, doğrulama ve derleme zincirini sınar.
 
@@ -293,3 +301,21 @@ Puanlama, kuralın seed'de döndürdüğü kullanıcı kümesiyle yapılır (bkz
   - **Testin yakaladığı hata:** Silme `not_draft` ile reddedildiğinde açık satırın ayrıntısı önbellekten siliniyor ama yeniden yüklenmiyordu; satır "Yükleniyor…"da kalıyordu. Ayrıntı yeniden çekilecek şekilde düzeltildi.
   - **Bilerek bozma:** Silmedeki taslak koşulu kaldırılınca 3 test, sayfalamada `id < before` yerine `<=` yazılınca 2 test kırıldı.
   - **Doğrulama:** `make test` (frontend 58 test dahil), `make lint` ve `make smoke` geçti. Docker'da nginx üzerinden liste, taslak silme (`204`) ve onaylı kampanya silme denemesi (`409`) kontrol edildi. Headless Firefox ile 1100 px ve 420 px genişlikte liste görünümü kontrol edildi; açık satır görünümü bileşen testleriyle doğrulandı, ekran görüntüsüyle bakılmadı. Deneme kampanyaları sonra silindi.
+- **Adım 14b (2026-11-09):** Sayı, kesin tarih ve sıra kriterleri eklendi. Tutar, sıralama ve ürün/kategori kapsam dışı; "en fazla N kez" eklenmedi (kullanıcı kararları).
+  - **Kural biçimi:** Yeni koşul tipi yok; olay koşuluna isteğe bağlı alanlar eklendi: `min_count` (2–100, yalnızca "yaptı" ile, signup hariç), `from`/`to` (`within_days` yerine takvim aralığı, iki gün dahil, en fazla 366 gün, Türkiye saati UTC+3) ve `then` (`{event, occurred}`: "X yaptı, sonra Y yaptı/yapmadı"; `min_count` ile birlikte kullanılamaz, Y ≠ X). Eski kurallar aynen geçerli; mevcut SQL çıktısı değişmedi.
+  - **Case brief'i (kullanıcı kararı):** "sepete ekleyip alışveriş yapmayan" artık sıralı yorumlanıyor: `add_to_cart✓30g→purchase✗`. Sepete en son eklenen ürünün ardından alışveriş yoksa kişi kitlede. Eval seed'inde 146 → 173 kişi; aradaki 27 kişi pencere içinde alışveriş yapıp sonra yeniden sepete ekleyenler (D-CART'taki kenar durumu). Mock LLM de bu kuralı döndürüyor. D-CART'ın eski yorumu testlerde `cartNoPurchaseRule` olarak korunuyor.
+  - **SQL:** Sayı `(SELECT count(*) …) >= $n`; sıra `EXISTS (X … AND [NOT] EXISTS (Y, Y.zaman > X.zaman))`; tarih aralığı `occurred_at >= $from AND occurred_at < $ertesi_gün`. Değerler yine yalnızca parametre.
+  - **Doğrulama:** Pencere tam olarak bir biçimde olmalı; tarih biçimi ve sırası kontrol edilir. `min_count: 1` uyarıyla kaldırılır. Çelişki kontrolü takvim aralıklarını kendi aralarında karşılaştırır ("5-10 Ekim'de aldı" + "Ekim'de almadı"); son N gün ile takvim aralığı karşılaştırılmaz (Validate saati bilmez). Koşul anahtarı yeni alanları içerir: içermeseydi "aldı" ile "3 kez aldı" tekrar sayılıp biri silinir ve kitle genişlerdi; bunu bir test kilitliyor. Yeni kural: `too_complex` sebebi varsa status `unsupported` olmalı (D-SEG "sınır aşılırsa kural kısaltılmaz").
+  - **LLM:** Şemaya alanlar eklendi; `within_days`, `from`, `to`, `min_count` ve `then` zorunlu ama `null` olabilir. Structured output sınırları dokümantasyondan doğrulandı (istek başına 24 isteğe bağlı alan, 16 union alanı; `format: date` destekleniyor). Prompt'a bugünün tarihi (kullanıcı mesajında, sistem prompt'u sabit kalır), tarih/sayı/sıra kuralları ve "X yapıp Y yapmayan = sıralı" yorumu eklendi. `ExtractSegment` artık `today` alıyor; eval seed'in sabit "bugün"ünü (2026-11-01) geçiyor.
+  - **Seed:** Yeni kohortlar: `case-cart-buy-cart` (sepete ekle → al → yeniden sepete ekle) ve İzmir'de 2, 3 ve pencere dışında kalan 3. alışveriş. Docker'daki mevcut veritabanı yeniden seed'lenmedi; yeni kohortlar için `docker compose down -v` gerekir.
+  - **Frontend:** Kural kartı sayıyı ("en az [3] kez"), takvim aralığını ("1 Ekim 2026 – 15 Ekim 2026") ve sırayı ("→ sonra Alışveriş yapmadı") gösterir. Sayı ve gün düzenlenebilir; tarih ve sıra yalnızca gösterilir. Sayı girişleri `NumberField` bileşenine ayrıldı.
+  - **Testler:** 30'dan fazla yeni doğrulama satırı, derleme ve özet testleri, kötü niyetli tarih ve olay değerleri; rastgele kural üreticisi artık sayı, tarih ve sıra da üretiyor ve SQL sonucu saf Go referans değerlendiricisiyle karşılaştırılıyor (300 kural). Kohort testleri iki yorumu ve alışveriş sayısı sınırlarını Postgres'te doğruluyor. Test setine 5 brief eklendi (#21–25), #4, #6 ve #11'in beklentisi güncellendi.
+  - **Bilerek bozma:** Sayıda `>=` yerine `>`, sırada `NOT` kaldırma, tarih aralığından son günü düşürme ve tarihleri UTC'de hesaplama referans testiyle (ilk ikisi kohort testleriyle de) yakalandı. Koşul anahtarından `min_count` çıkarılınca regresyon testi kırıldı; referans testi kırılmadı (rastgele kurallar bu çifti nadiren üretiyor), bu yüzden ayrı test gerekliydi.
+  - **Gerçek API (kullanıcı onayıyla, `claude-sonnet-5-5`):** Toplam ~250 çağrı, yaklaşık 2,6 $.
+    - Küçük deneme (8 çağrı): 8/8. Rapor repoya alınmadı.
+    - İlk tam eval (75 çağrı, `2026-11-09T1409`): 74/75, 24/25 tutarlı. Hata: #6'da bir kez sıralı yerine bağımsız yorum. Prompt'taki "iki olayın ayrı pencereleri varsa bağımsız yaz" istisnası daraltıldı; örnek test setinde olmayan bir brief'le yazıldı.
+    - #4, #6, #24 × 3 (`2026-11-09T1411-cases-4-6-24`): 8/9. #24'te model varsayımda "sonrasında sepete ekleyen" yazdığı hâlde `then` alanını yazmadı; kitle 22 kişi genişledi. Önlem: `min_count` ve `then` isteğe bağlı değil, zorunlu ve `null` olabilir yapıldı.
+    - İkinci tam eval (78 çağrı, `2026-11-09T1412`): 72/75, 22/25. Yeni hatalar: "son N gün"ün iki kez takvim tarihine çevrilmesi (#6, #17) ve #19'da 6 gruptan birinin atılıp `partial` dönülmesi. Önlem: pencere alanları da zorunlu-`null` yapıldı (zorunlu alanlar şemadaki sırayla yazılır, `within_days` önce gelir) ve `too_complex` kuralı backend'e eklendi.
+    - Son tam eval (77 çağrı, `2026-11-09T1416`): **75/75 doğru, 25/25 tutarlı**, 2 onarım, API hatası yok.
+  - **Not:** Son iki düzeltme küçük örneklemlerde görülen hatalara göre yapıldı. Son sonuç iyi, ama tek bir 75 çağrılık çalıştırma; model davranışı çalıştırmadan çalıştırmaya değişebilir.
+  - **Doğrulama:** `make test` (frontend 60 test dahil), `make lint`, `make eval-dry` (75/75) ve `make smoke` geçti. Headless Firefox ile mock modda sıralı kural kartı kontrol edildi.

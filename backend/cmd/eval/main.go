@@ -1,4 +1,4 @@
-// Command eval measures segment extraction on the 20-brief test set
+// Command eval measures segment extraction on the 25-brief test set
 // (make eval, D-TEST). It seeds a temporary database with a fixed dataset
 // and date, sends each brief to the model several times through the
 // production pipeline, scores the runs and writes a Markdown and a JSON
@@ -108,7 +108,7 @@ func run() error {
 		Commit: *commit, Runs: *runs, SeedNow: seedNow, SeedUsers: seed.DefaultUserCount, RNGSeed: seed.DefaultSeed,
 	}
 	results, err := eval.Execute(ctx, cases, eval.Options{
-		Client: budget, Audience: eval.DBAudience(pool, seedNow), Runs: *runs, Parallel: *parallel,
+		Client: budget, Audience: eval.DBAudience(pool, seedNow), Today: seedNow, Runs: *runs, Parallel: *parallel,
 		Progress: func(c eval.Case, run int, r eval.Run, v eval.Verdict) {
 			mark := "✅"
 			if !v.Correct {

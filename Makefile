@@ -37,7 +37,7 @@ test-frontend: frontend-deps
 test-live:
 	cd $(BACKEND) && go test -count=1 -v -tags live -run '^TestLive' ./internal/llm/
 
-# Model quality on the 20-brief set (D-TEST). Real API, paid: one call per
+# Model quality on the 25-brief set (D-TEST). Real API, paid: one call per
 # brief and run, up to 3 with repairs (the -max-calls budget). Run only with
 # approval. Small run: make eval RUNS=1 CASES=1,4,7. Reports: eval/reports/.
 RUNS ?= 3

@@ -45,6 +45,15 @@ func obj(t *testing.T, v any, path string) map[string]any {
 // requires all of them and forbids additional properties (API requirement).
 func checkObject(t *testing.T, path string, schema map[string]any, want []string) map[string]any {
 	t.Helper()
+	return checkObjectOptional(t, path, schema, want, nil)
+}
+
+// checkObjectOptional is checkObject where the fields in optional may be
+// left out of required. Optional properties are limited by the API (24 per
+// request across schemas), so only the event window, count and sequence
+// fields use them.
+func checkObjectOptional(t *testing.T, path string, schema map[string]any, want, optional []string) map[string]any {
+	t.Helper()
 	props := obj(t, schema["properties"], path+".properties")
 	if got := keys(props); !slices.Equal(got, want) {
 		t.Errorf("%s: properties %v, struct has %v", path, got, want)
@@ -57,8 +66,14 @@ func checkObject(t *testing.T, path string, schema map[string]any, want []string
 		req = append(req, r.(string))
 	}
 	sort.Strings(req)
-	if !slices.Equal(req, keys(props)) {
-		t.Errorf("%s: required %v, want all properties %v", path, req, keys(props))
+	var wantReq []string
+	for _, k := range keys(props) {
+		if !slices.Contains(optional, k) {
+			wantReq = append(wantReq, k)
+		}
+	}
+	if !slices.Equal(req, wantReq) {
+		t.Errorf("%s: required %v, want %v", path, req, wantReq)
 	}
 	return props
 }
@@ -119,7 +134,13 @@ func TestSegmentSchemaMatchesRule(t *testing.T) {
 	for i, v := range variants {
 		vm := obj(t, v, "variant")
 		props := obj(t, vm["properties"], "variant.properties")
-		checkObject(t, "condition variant", vm, keys(props))
+		// Every field is required. The event qualifiers (window, count,
+		// order) are nullable instead of optional: optional properties are
+		// written after the required ones, and the model then tended to
+		// pick a window or drop a qualifier as an afterthought. Required
+		// properties keep the schema's order, so within_days comes first.
+		var optional []string
+		checkObjectOptional(t, "condition variant", vm, keys(props), optional)
 		for k := range props {
 			union[k] = true
 		}
@@ -146,6 +167,26 @@ func TestSegmentSchemaMatchesRule(t *testing.T) {
 			want := sorted(segment.EventSignup, segment.EventProductView, segment.EventAddToCart, segment.EventPurchase)
 			if got := enumOf(t, props["event"], "event"); !slices.Equal(got, want) {
 				t.Errorf("events %v, want %v", got, want)
+			}
+			thenAny := obj(t, props["then"], "then")["anyOf"].([]any)
+			if len(thenAny) != 2 || obj(t, thenAny[1], "then null")["type"] != "null" {
+				t.Errorf("then must be an object or null: %v", thenAny)
+			}
+			if mc := obj(t, props["min_count"], "min_count")["type"]; !reflect.DeepEqual(mc, []any{"integer", "null"}) {
+				t.Errorf("min_count type %v, want integer or null", mc)
+			}
+			tprops := checkObject(t, "then", obj(t, thenAny[0], "then object"), jsonFields(reflect.TypeFor[segment.Then]()))
+			if got := enumOf(t, tprops["event"], "then.event"); !slices.Equal(got, want) {
+				t.Errorf("then events %v, want %v", got, want)
+			}
+			for _, k := range []string{"from", "to"} {
+				alt := obj(t, props[k], k)["anyOf"].([]any)
+				if obj(t, alt[0], k)["format"] != "date" || obj(t, alt[1], k)["type"] != "null" {
+					t.Errorf("%s must be a date or null: %v", k, alt)
+				}
+			}
+			if wd := obj(t, props["within_days"], "within_days")["type"]; !reflect.DeepEqual(wd, []any{"integer", "null"}) {
+				t.Errorf("within_days type %v, want integer or null", wd)
 			}
 		}
 	}
@@ -212,5 +253,27 @@ func TestDecodeRuleStrict(t *testing.T) {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// The model writes null for an unused count or order; strict decoding must
+// accept that and leave the fields unset.
+func TestDecodeRuleNullQualifiers(t *testing.T) {
+	text := `{"status":"ok","audience_scope":"filtered","common":[` +
+		`{"type":"event","event":"purchase","occurred":true,"within_days":30,"from":null,"to":null,"min_count":null,"then":null},` +
+		`{"type":"event","event":"add_to_cart","occurred":true,"within_days":null,"from":"2026-10-01","to":"2026-10-15","min_count":null,"then":{"event":"purchase","occurred":false}}` +
+		`],"groups":[],"assumptions":[],"unsupported":[],"notes":[]}`
+	r, err := decodeRule(text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := r.Common[0]; c.MinCount != nil || c.Then != nil {
+		t.Errorf("null qualifiers decoded as %+v", c)
+	}
+	if c := r.Common[1]; c.Then == nil || c.Then.Event != segment.EventPurchase {
+		t.Errorf("then not decoded: %+v", c)
+	}
+	if v := segment.Validate(r); !v.Valid() {
+		t.Errorf("validation: %v", v.Errors)
 	}
 }

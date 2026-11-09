@@ -30,9 +30,35 @@ func okRule(common []Condition, groups ...Group) Rule {
 	return Rule{Status: StatusOK, AudienceScope: ScopeFiltered, Common: common, Groups: groups}
 }
 
-// caseRule is the case brief under D-CART: İstanbul, add_to_cart in the
-// last 30 days, no purchase in the last 30 days.
+func countEvent(ev EventType, n, days int) Condition {
+	c := event(ev, true, days)
+	c.MinCount = ptr(n)
+	return c
+}
+
+func dateEvent(ev EventType, occurred bool, from, to string) Condition {
+	return Condition{Type: KindEvent, Event: ev, Occurred: ptr(occurred), From: from, To: to}
+}
+
+func seqEvent(first EventType, days int, then EventType, thenOccurred bool) Condition {
+	c := event(first, true, days)
+	c.Then = &Then{Event: then, Occurred: ptr(thenOccurred)}
+	return c
+}
+
+// caseRule is the case brief as read since PLAN step 14b: İstanbul, and an
+// add_to_cart in the last 30 days with no purchase after it.
 func caseRule() Rule {
+	return okRule([]Condition{
+		city(OpIn, "İstanbul"),
+		seqEvent(EventAddToCart, 30, EventPurchase, false),
+	})
+}
+
+// cartNoPurchaseRule is the earlier reading of the case brief (D-CART):
+// add_to_cart in the last 30 days and no purchase in the last 30 days, as
+// two independent conditions.
+func cartNoPurchaseRule() Rule {
 	return okRule([]Condition{
 		city(OpIn, "İstanbul"),
 		event(EventAddToCart, true, 30),
@@ -95,6 +121,35 @@ func randomCondition(rng *rand.Rand) Condition {
 		}
 		return age(op, 16+rng.IntN(55))
 	default:
-		return event(genEvents[rng.IntN(len(genEvents))], rng.IntN(2) == 0, genDays[rng.IntN(len(genDays))])
+		return randomEvent(rng)
 	}
+}
+
+// randomEvent covers every event form: plain, count, calendar range and
+// sequence. Ranges end before or on testNow's day and start at most 200
+// days earlier, so they overlap the seed's events.
+func randomEvent(rng *rand.Rand) Condition {
+	ev := genEvents[rng.IntN(len(genEvents))]
+	c := event(ev, rng.IntN(2) == 0, genDays[rng.IntN(len(genDays))])
+	if rng.IntN(3) == 0 {
+		end := testNow.AddDate(0, 0, -rng.IntN(120))
+		start := end.AddDate(0, 0, -rng.IntN(80))
+		c.WithinDays = nil
+		c.From, c.To = start.Format(DateLayout), end.Format(DateLayout)
+	}
+	if !*c.Occurred {
+		return c
+	}
+	switch rng.IntN(4) {
+	case 0:
+		if ev != EventSignup {
+			c.MinCount = ptr(2 + rng.IntN(3))
+		}
+	case 1:
+		then := genEvents[rng.IntN(len(genEvents))]
+		if then != ev {
+			c.Then = &Then{Event: then, Occurred: ptr(rng.IntN(2) == 0)}
+		}
+	}
+	return c
 }

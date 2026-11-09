@@ -85,7 +85,7 @@ func (s *Service) Create(ctx context.Context, brief string) (Campaign, llm.Segme
 	}
 	llmCtx, cancel := context.WithTimeout(ctx, extractTimeout)
 	defer cancel()
-	res, err := llm.ExtractSegment(llmCtx, s.llm, brief)
+	res, err := llm.ExtractSegment(llmCtx, s.llm, brief, s.now())
 	if err != nil {
 		return Campaign{}, res, err
 	}

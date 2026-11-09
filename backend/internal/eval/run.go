@@ -29,6 +29,9 @@ type AudienceFunc func(ctx context.Context, r segment.Rule) ([]int64, error)
 type Options struct {
 	Client   llm.Client
 	Audience AudienceFunc
+	// Today is the date the model is told, so relative dates in briefs
+	// ("Ekim'de") resolve against the seed's fixed "now", not the clock.
+	Today    time.Time
 	Runs     int // runs per brief
 	Parallel int // runs in flight at once
 	// Timeout bounds one run, repairs included. Zero means 3 minutes.
@@ -62,6 +65,9 @@ func (cr CaseResult) CorrectRuns() int {
 func Execute(ctx context.Context, cases []Case, opts Options) ([]CaseResult, error) {
 	if opts.Runs < 1 || opts.Parallel < 1 {
 		return nil, fmt.Errorf("runs and parallel must be at least 1")
+	}
+	if opts.Today.IsZero() {
+		return nil, fmt.Errorf("today must be set")
 	}
 	if opts.Timeout == 0 {
 		opts.Timeout = 3 * time.Minute
@@ -131,7 +137,7 @@ func runOnce(ctx context.Context, opts Options, c Case) (Run, error) {
 	defer cancel()
 
 	start := time.Now()
-	res, err := llm.ExtractSegment(ctx, opts.Client, c.Brief)
+	res, err := llm.ExtractSegment(ctx, opts.Client, c.Brief, opts.Today)
 	usage := res.Usage()
 	r := Run{
 		Repairs: res.Repairs, Calls: len(res.Attempts),

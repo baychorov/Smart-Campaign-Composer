@@ -3,6 +3,7 @@ package segment
 import (
 	"fmt"
 	"slices"
+	"time"
 )
 
 // Issue codes. Errors block approval; warnings record an automatic fix or
@@ -28,6 +29,7 @@ const (
 	CodeDuplicateCondition = "duplicate_condition"
 	CodeCoveredGroup       = "covered_group"
 	CodeSingleGroup        = "single_group"
+	CodeNormalizedCount    = "normalized_count"
 )
 
 // Issue is one validation finding. Message is Turkish because it is shown
@@ -127,7 +129,7 @@ func (v *validator) checkCondition(path string, c *Condition) {
 }
 
 func (v *validator) checkAttribute(path string, c *Condition) {
-	if c.Event != "" || c.Occurred != nil || c.WithinDays != nil {
+	if c.Event != "" || c.Occurred != nil || c.WithinDays != nil || c.From != "" || c.To != "" || c.MinCount != nil || c.Then != nil {
 		v.errorf(path, CodeInvalidCondition, "attribute koşulunda olay alanları bulunamaz")
 	}
 	switch c.Field {
@@ -163,19 +165,98 @@ func (v *validator) checkEvent(path string, c *Condition) {
 	if c.Field != "" || c.Op != "" || len(c.Values) > 0 || c.Value != nil {
 		v.errorf(path, CodeInvalidCondition, "event koşulunda attribute alanları bulunamaz")
 	}
-	switch c.Event {
-	case EventSignup, EventProductView, EventAddToCart, EventPurchase:
-	default:
+	if !validEvent(c.Event) {
 		v.errorf(path+".event", CodeInvalidEnum, "bilinmeyen olay: %q", c.Event)
 	}
 	if c.Occurred == nil {
 		v.errorf(path+".occurred", CodeInvalidCondition, "occurred gerekli")
 	}
-	if c.WithinDays == nil {
-		v.errorf(path+".within_days", CodeInvalidCondition, "within_days gerekli")
-	} else if *c.WithinDays < MinWithinDays || *c.WithinDays > MaxWithinDays {
-		v.errorf(path+".within_days", CodeOutOfRange, "within_days %d-%d aralığında olmalı, %d geldi", MinWithinDays, MaxWithinDays, *c.WithinDays)
+	did := c.Occurred != nil && *c.Occurred
+
+	// The window: last N days or a calendar range, never both.
+	hasDates := c.From != "" || c.To != ""
+	switch {
+	case c.WithinDays != nil && hasDates:
+		v.errorf(path, CodeInvalidCondition, "within_days ile from/to birlikte kullanılamaz; biri seçilmeli")
+	case c.WithinDays != nil:
+		if *c.WithinDays < MinWithinDays || *c.WithinDays > MaxWithinDays {
+			v.errorf(path+".within_days", CodeOutOfRange, "within_days %d-%d aralığında olmalı, %d geldi", MinWithinDays, MaxWithinDays, *c.WithinDays)
+		}
+	case hasDates:
+		v.checkDates(path, c)
+	default:
+		v.errorf(path+".within_days", CodeInvalidCondition, "within_days veya from/to gerekli")
 	}
+
+	if c.MinCount != nil {
+		switch {
+		case *c.MinCount == 1:
+			// "At least once" is what occurred=true already means.
+			c.MinCount = nil
+			v.warnf(path+".min_count", CodeNormalizedCount, "min_count 1 kaldırıldı; \"en az bir kez\" zaten occurred true demek")
+		case !did:
+			v.errorf(path+".min_count", CodeInvalidCondition, "min_count yalnızca occurred true ile kullanılır")
+		case c.Event == EventSignup:
+			v.errorf(path+".min_count", CodeInvalidCondition, "kayıt bir kez olur; signup için min_count kullanılamaz")
+		case *c.MinCount < MinCount || *c.MinCount > MaxCount:
+			v.errorf(path+".min_count", CodeOutOfRange, "min_count %d-%d aralığında olmalı, %d geldi", MinCount, MaxCount, *c.MinCount)
+		}
+	}
+
+	if c.Then != nil {
+		if !did {
+			v.errorf(path+".then", CodeInvalidCondition, "then yalnızca occurred true ile kullanılır: önce olay olmalı, sonra ikinci olaya bakılır")
+		}
+		if c.MinCount != nil {
+			v.errorf(path+".then", CodeInvalidCondition, "then ile min_count birlikte kullanılamaz")
+		}
+		if !validEvent(c.Then.Event) {
+			v.errorf(path+".then.event", CodeInvalidEnum, "bilinmeyen olay: %q", c.Then.Event)
+		} else if c.Then.Event == c.Event {
+			v.errorf(path+".then.event", CodeInvalidCondition, "then.event ilk olaydan farklı olmalı")
+		}
+		if c.Then.Occurred == nil {
+			v.errorf(path+".then.occurred", CodeInvalidCondition, "then.occurred gerekli")
+		}
+	}
+}
+
+func validEvent(e EventType) bool {
+	switch e {
+	case EventSignup, EventProductView, EventAddToCart, EventPurchase:
+		return true
+	}
+	return false
+}
+
+// checkDates checks a From..To calendar range.
+func (v *validator) checkDates(path string, c *Condition) {
+	from, errFrom := time.ParseInLocation(DateLayout, c.From, Istanbul)
+	to, errTo := time.ParseInLocation(DateLayout, c.To, Istanbul)
+	if errFrom != nil {
+		v.errorf(path+".from", CodeInvalidCondition, "from YYYY-AA-GG biçiminde bir tarih olmalı, %q geldi", c.From)
+	}
+	if errTo != nil {
+		v.errorf(path+".to", CodeInvalidCondition, "to YYYY-AA-GG biçiminde bir tarih olmalı, %q geldi", c.To)
+	}
+	if errFrom != nil || errTo != nil {
+		return
+	}
+	switch days := int(to.Sub(from).Hours()/24) + 1; {
+	case to.Before(from):
+		v.errorf(path, CodeInvalidCondition, "from (%s) to'dan (%s) sonra olamaz", c.From, c.To)
+	case days > MaxDateRangeDays:
+		v.errorf(path, CodeOutOfRange, "tarih aralığı en fazla %d gün olabilir, %d gün geldi", MaxDateRangeDays, days)
+	}
+}
+
+// DateRange returns the instants a From..To condition covers: [from, to).
+// to is the start of the day after c.To, so the last day is included. The
+// condition must be valid.
+func DateRange(c Condition) (from, to time.Time) {
+	from, _ = time.ParseInLocation(DateLayout, c.From, Istanbul)
+	last, _ := time.ParseInLocation(DateLayout, c.To, Istanbul)
+	return from, last.AddDate(0, 0, 1)
 }
 
 func (v *validator) checkLimits(r *Rule) {
@@ -241,6 +322,12 @@ func contradiction(conds []Condition) string {
 	excluded := map[string]bool{}
 	did := map[EventType]int{}    // smallest window with Occurred=true
 	didNot := map[EventType]int{} // largest window with Occurred=false
+	// Calendar ranges, compared only with each other: a "last N days"
+	// window moves with the clock, so comparing it with a fixed range would
+	// need the current time, which Validate does not take.
+	type span struct{ from, to time.Time }
+	didIn := map[EventType][]span{}
+	didNotIn := map[EventType][]span{}
 
 	for _, c := range conds {
 		switch {
@@ -259,6 +346,14 @@ func contradiction(conds []Condition) string {
 		case c.Field == FieldCity && c.Op == OpNotIn:
 			for _, city := range c.Values {
 				excluded[city] = true
+			}
+		// A count or sequence condition also says "did X in the window".
+		case c.Type == KindEvent && c.WithinDays == nil:
+			from, to := DateRange(c)
+			if *c.Occurred {
+				didIn[c.Event] = append(didIn[c.Event], span{from, to})
+			} else {
+				didNotIn[c.Event] = append(didNotIn[c.Event], span{from, to})
 			}
 		case c.Type == KindEvent && *c.Occurred:
 			if d, ok := did[c.Event]; !ok || *c.WithinDays < d {
@@ -291,6 +386,16 @@ func contradiction(conds []Condition) string {
 			return fmt.Sprintf("%s olayı son %d günde hem var hem yok", ev, n)
 		}
 	}
+	// "did X in [a,b]" and "did not do X in [c,d]" with [a,b] inside [c,d].
+	for ev, spans := range didIn {
+		for _, d := range spans {
+			for _, n := range didNotIn[ev] {
+				if !d.from.Before(n.from) && !d.to.After(n.to) {
+					return fmt.Sprintf("%s olayı aynı tarih aralığında hem var hem yok", ev)
+				}
+			}
+		}
+	}
 	return ""
 }
 
@@ -306,6 +411,11 @@ func (v *validator) checkStatus(r *Rule) {
 		}
 		if r.Status == StatusPartial && !hasUnsupported {
 			v.errorf("status", CodeStatusMismatch, "status partial iken unsupported listesi dolu olmalı")
+		}
+		// D-SEG: a rule over the limits is not trimmed to fit; dropping a
+		// whole group would silently shrink the audience.
+		if slices.ContainsFunc(r.Unsupported, func(u Unsupported) bool { return u.Reason == ReasonTooComplex }) {
+			v.errorf("status", CodeStatusMismatch, "too_complex sebebi varsa status unsupported olmalı ve koşul yazılmamalı; kural sınırlara sığdırılmak için kısaltılmaz")
 		}
 		if r.AudienceScope == ScopeAll && hasConds {
 			v.errorf("audience_scope", CodeScopeMismatch, "audience_scope all iken koşul olamaz")
@@ -348,6 +458,10 @@ func cloneConditions(cs []Condition) []Condition {
 		out[i].Value = clonePtr(c.Value)
 		out[i].Occurred = clonePtr(c.Occurred)
 		out[i].WithinDays = clonePtr(c.WithinDays)
+		out[i].MinCount = clonePtr(c.MinCount)
+		if c.Then != nil {
+			out[i].Then = &Then{Event: c.Then.Event, Occurred: clonePtr(c.Then.Occurred)}
+		}
 	}
 	return out
 }

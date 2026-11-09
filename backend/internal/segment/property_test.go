@@ -133,6 +133,9 @@ func ruleTexts(r Rule) []string {
 	collect := func(cs []Condition) {
 		for _, c := range cs {
 			texts = append(texts, c.Values...)
+			if c.From != "" {
+				texts = append(texts, c.From, c.To) // dates travel as time.Time args
+			}
 		}
 	}
 	collect(r.Common)
@@ -158,6 +161,9 @@ func TestHostileValuesNeverCompile(t *testing.T) {
 			"op":         okRule([]Condition{{Type: KindAttribute, Field: FieldCity, Op: Op(p), Values: []string{"Ankara"}}}),
 			"event":      okRule([]Condition{event(EventType(p), true, 30)}),
 			"type":       okRule([]Condition{{Type: Kind(p)}}),
+			"from":       okRule([]Condition{dateEvent(EventPurchase, true, p, "2026-10-01")}),
+			"to":         okRule([]Condition{dateEvent(EventPurchase, true, "2026-10-01", "2026-10-01"+p)}),
+			"then event": okRule([]Condition{seqEvent(EventAddToCart, 30, EventType(p), false)}),
 		}
 		for where, r := range rules {
 			if _, err := CompileAudience(r, ChannelSMS, testNow); err == nil {

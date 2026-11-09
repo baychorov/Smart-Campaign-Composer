@@ -46,7 +46,7 @@ func TestLiveSegmentEndTurn(t *testing.T) {
 	a, model := liveAdapter(t)
 	req := Request{
 		System:    segmentSystemPrompt,
-		Prompt:    segmentPrompt(caseBrief),
+		Prompt:    segmentPrompt(caseBrief, time.Now()),
 		Schema:    SegmentSchema(),
 		MaxTokens: segmentMaxTokens,
 		Effort:    EffortLow,
@@ -85,9 +85,9 @@ func TestLiveSegmentEndTurn(t *testing.T) {
 	// Informational only: interpretation quality is measured by make eval.
 	want := segment.Validate(caseRuleForLive()).Rule
 	if jsonString(v.Rule.Common) == jsonString(want.Common) && len(v.Rule.Groups) == 0 {
-		t.Log("audience matches D-CART")
+		t.Log("audience matches the case brief (cart, then no purchase)")
 	} else {
-		t.Logf("NOTE: audience differs from D-CART; check with make eval")
+		t.Logf("NOTE: audience differs from the expected case rule; check with make eval")
 	}
 }
 
@@ -97,7 +97,7 @@ func TestLiveMaxTokens(t *testing.T) {
 	a, _ := liveAdapter(t)
 	req := Request{
 		System:    segmentSystemPrompt,
-		Prompt:    segmentPrompt(caseBrief),
+		Prompt:    segmentPrompt(caseBrief, time.Now()),
 		Schema:    SegmentSchema(),
 		MaxTokens: 40,
 		Effort:    EffortLow,
@@ -116,7 +116,7 @@ func TestLiveMaxTokens(t *testing.T) {
 func caseRuleForLive() segment.Rule {
 	return ok(conds(
 		city(segment.OpIn, "İstanbul"),
-		event(segment.EventAddToCart, true, 30),
-		event(segment.EventPurchase, false, 30),
+		segment.Condition{Type: segment.KindEvent, Event: segment.EventAddToCart, Occurred: ptr(true), WithinDays: ptr(30),
+			Then: &segment.Then{Event: segment.EventPurchase, Occurred: ptr(false)}},
 	))
 }

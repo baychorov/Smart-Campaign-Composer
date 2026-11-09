@@ -12,7 +12,27 @@ func TestSummarize(t *testing.T) {
 		{
 			name: "case brief",
 			rule: caseRule(),
+			want: "Tüm koşullar: şehri İstanbul olan; son 30 günde sepete ürün eklemiş ve sonrasında alışveriş yapmamış",
+		},
+		{
+			name: "independent cart and purchase",
+			rule: cartNoPurchaseRule(),
 			want: "Tüm koşullar: şehri İstanbul olan; son 30 günde sepete ürün eklemiş; son 30 günde alışveriş yapmamış",
+		},
+		{
+			name: "count, range, single day, sequence with occurred",
+			rule: okRule([]Condition{
+				countEvent(EventPurchase, 3, 90),
+				dateEvent(EventProductView, true, "2026-10-01", "2026-10-15"),
+				dateEvent(EventSignup, true, "2026-11-01", "2026-11-01"),
+				seqEvent(EventProductView, 7, EventAddToCart, true),
+				dateEvent(EventPurchase, false, "2026-12-24", "2027-01-02"),
+			}),
+			want: "Tüm koşullar: son 90 günde en az 3 kez alışveriş yapmış; " +
+				"1 Ekim 2026 – 15 Ekim 2026 arasında ürün incelemiş; " +
+				"1 Kasım 2026 tarihinde kayıt olmuş; " +
+				"son 7 günde ürün incelemiş ve sonrasında sepete ürün eklemiş; " +
+				"24 Aralık 2026 – 2 Ocak 2027 arasında alışveriş yapmamış",
 		},
 		{
 			name: "brief 17",

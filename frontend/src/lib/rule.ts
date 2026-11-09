@@ -55,13 +55,19 @@ export function removeValue(rule: Rule, path: CondPath, valueIndex: number): Rul
   return next
 }
 
-/** Sets an age (value) or an event window (within_days). Range checks are the backend's. */
-export function setNumber(rule: Rule, path: CondPath, n: number): Rule {
+/** The numbers the UI lets the marketer change. */
+export type NumberField = 'value' | 'within_days' | 'min_count'
+
+/**
+ * Sets an age (value), an event window (within_days) or a count
+ * (min_count). Without field, an event's window or an attribute's value.
+ * Range checks are the backend's.
+ */
+export function setNumber(rule: Rule, path: CondPath, n: number, field?: NumberField): Rule {
   const next = cloneRule(rule)
   const cond = conditionsAt(next, path)[path.index]
   if (!cond) return next
-  if (cond.type === 'event') cond.within_days = n
-  else cond.value = n
+  cond[field ?? (cond.type === 'event' ? 'within_days' : 'value')] = n
   return next
 }
 

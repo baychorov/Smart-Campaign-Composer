@@ -24,7 +24,14 @@ export interface Condition {
   value?: number
   event?: EventType
   occurred?: boolean
+  /** The window is within_days, or the calendar days from..to (YYYY-MM-DD, both included). */
   within_days?: number
+  from?: string
+  to?: string
+  /** "At least n times" in the window; only on a "did" condition. */
+  min_count?: number
+  /** "Did event, and after that did (not) do then.event". */
+  then?: { event: EventType; occurred: boolean }
 }
 
 export interface Group {

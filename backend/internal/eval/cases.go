@@ -1,4 +1,4 @@
-// Package eval measures segment extraction against the 20-brief test set in
+// Package eval measures segment extraction against the 25-brief test set in
 // docs/PLAN.md (D-TEST). Each brief is sent to the model several times; a
 // run is correct when its status, its unsupported reasons and the set of
 // users its rule selects on a fixed seed match the expectation. Accuracy

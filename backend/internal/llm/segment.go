@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/segment"
@@ -128,15 +129,16 @@ func CheckBrief(brief string) (string, error) {
 //
 // A nil error means res.Validation.Valid() is true. The rule may still have
 // status unsupported or rejected; res.Validation.Approvable() tells whether
-// it describes an audience.
-func ExtractSegment(ctx context.Context, c Client, brief string) (SegmentResult, error) {
+// it describes an audience. today anchors relative dates in the brief
+// ("Ekim'de", "geçen ay").
+func ExtractSegment(ctx context.Context, c Client, brief string, today time.Time) (SegmentResult, error) {
 	var res SegmentResult
 	brief, err := CheckBrief(brief)
 	if err != nil {
 		return res, err
 	}
 
-	prompt := segmentPrompt(brief)
+	prompt := segmentPrompt(brief, today)
 	for repair := 0; ; repair++ {
 		req := Request{
 			System:    segmentSystemPrompt,
@@ -168,7 +170,7 @@ func ExtractSegment(ctx context.Context, c Client, brief string) (SegmentResult,
 			return res, fmt.Errorf("extract segment: %w", ErrInvalidOutput)
 		}
 		res.Repairs++
-		prompt = repairPrompt(brief, resp.Text, res.Issues)
+		prompt = repairPrompt(brief, today, resp.Text, res.Issues)
 	}
 }
 

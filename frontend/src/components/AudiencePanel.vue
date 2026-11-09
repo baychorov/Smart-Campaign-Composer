@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import type { ApiError } from '../api/client'
 import type { Campaign, Issue, Rule } from '../api/types'
 import { audienceSentence, formatCount, REASON_LABELS } from '../lib/labels'
-import { isLastCondition, removeCondition, removeValue, setNumber, type CondPath } from '../lib/rule'
+import { isLastCondition, removeCondition, removeValue, setNumber, type CondPath, type NumberField } from '../lib/rule'
 import ConditionRow from './ConditionRow.vue'
 
 const props = defineProps<{
@@ -29,7 +29,7 @@ const summaryText = computed(() => audienceSentence(props.campaign.summary))
 
 const onRemove = (p: CondPath) => emit('updateRule', removeCondition(rule.value, p))
 const onRemoveValue = (p: CondPath, i: number) => emit('updateRule', removeValue(rule.value, p, i))
-const onSetNumber = (p: CondPath, n: number) => emit('updateRule', setNumber(rule.value, p, n))
+const onSetNumber = (p: CondPath, f: NumberField, n: number) => emit('updateRule', setNumber(rule.value, p, n, f))
 
 function rewriteBrief() {
   void router.push({ name: 'new', state: { brief: props.campaign.brief } })
@@ -107,7 +107,7 @@ function rewriteBrief() {
               :can-remove="canRemove"
               @remove="onRemove({ group: null, index: i })"
               @remove-value="(v) => onRemoveValue({ group: null, index: i }, v)"
-              @set-number="(n) => onSetNumber({ group: null, index: i }, n)"
+              @set-number="(f, n) => onSetNumber({ group: null, index: i }, f, n)"
             />
           </div>
         </div>
@@ -131,7 +131,7 @@ function rewriteBrief() {
                   :can-remove="canRemove"
                   @remove="onRemove({ group: gi, index: i })"
                   @remove-value="(v) => onRemoveValue({ group: gi, index: i }, v)"
-                  @set-number="(n) => onSetNumber({ group: gi, index: i }, n)"
+                  @set-number="(f, n) => onSetNumber({ group: gi, index: i }, f, n)"
                 />
               </div>
             </div>

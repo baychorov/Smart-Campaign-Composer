@@ -199,14 +199,49 @@ func (b *builder) condition(c Condition) string {
 			return col + " <= " + b.arg(*c.Value)
 		}
 	case KindEvent:
-		since := b.now.Add(-time.Duration(*c.WithinDays) * 24 * time.Hour)
-		exists := "EXISTS (SELECT 1 FROM user_events e WHERE e.user_id = u.id AND e.event_type = " +
-			b.arg(string(c.Event)) + " AND e.occurred_at >= " + b.arg(since) + ")"
-		if *c.Occurred {
-			return exists
-		}
-		return "NOT " + exists
+		return b.event(c)
 	}
 	// Unreachable for a validated rule; fail closed rather than emit SQL.
 	panic(fmt.Sprintf("segment: uncompilable condition %+v", c))
+}
+
+// event compiles an event condition. Every form is an EXISTS over
+// user_events (or a count for MinCount) that the index on (user_id,
+// event_type, occurred_at) serves:
+//
+//	did X in window:              EXISTS (X in window)
+//	did not:                      NOT EXISTS (X in window)
+//	at least n times:             (SELECT count(*) … X in window) >= n
+//	X, then (not) Y:              EXISTS (X in window AND [NOT] EXISTS (Y after that X))
+//
+// "Then not Y" holds when some X in the window has no Y after it; that is
+// the same as "no Y after the last X in the window".
+func (b *builder) event(c Condition) string {
+	match := "e.user_id = u.id AND e.event_type = " + b.arg(string(c.Event)) + " AND " + b.window(c)
+	switch {
+	case !*c.Occurred:
+		return "NOT EXISTS (SELECT 1 FROM user_events e WHERE " + match + ")"
+	case c.MinCount != nil:
+		return "(SELECT count(*) FROM user_events e WHERE " + match + ") >= " + b.arg(*c.MinCount)
+	case c.Then != nil:
+		after := "EXISTS (SELECT 1 FROM user_events f WHERE f.user_id = u.id AND f.event_type = " +
+			b.arg(string(c.Then.Event)) + " AND f.occurred_at > e.occurred_at)"
+		if !*c.Then.Occurred {
+			after = "NOT " + after
+		}
+		return "EXISTS (SELECT 1 FROM user_events e WHERE " + match + " AND " + after + ")"
+	default:
+		return "EXISTS (SELECT 1 FROM user_events e WHERE " + match + ")"
+	}
+}
+
+// window compiles the time window of an event condition on e.occurred_at.
+// Both forms are computed in Go and passed as parameters.
+func (b *builder) window(c Condition) string {
+	if c.WithinDays != nil {
+		since := b.now.Add(-time.Duration(*c.WithinDays) * 24 * time.Hour)
+		return "e.occurred_at >= " + b.arg(since)
+	}
+	from, to := DateRange(c)
+	return "e.occurred_at >= " + b.arg(from) + " AND e.occurred_at < " + b.arg(to)
 }

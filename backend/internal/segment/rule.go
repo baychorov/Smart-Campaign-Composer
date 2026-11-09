@@ -5,6 +5,8 @@
 // Audience = consent ∧ common ∧ (group₁ ∨ … ∨ groupₙ)   (DECISIONS D-SEG)
 package segment
 
+import "time"
+
 // Status is the LLM's verdict on how much of the brief it could express.
 type Status string
 
@@ -93,7 +95,17 @@ const (
 	MaxWithinDays      = 365
 	MinAge             = 13
 	MaxAge             = 100
+	MinCount           = 2 // "at least 1" is plain occurred=true
+	MaxCount           = 100
+	MaxDateRangeDays   = 366
 )
+
+// DateLayout is the format of Condition.From and To (calendar days).
+const DateLayout = "2006-01-02"
+
+// Istanbul is the zone calendar dates are read in. Turkey has used UTC+3
+// all year since 2016, so a fixed zone avoids depending on tzdata.
+var Istanbul = time.FixedZone("TRT", 3*60*60)
 
 // Rule is the structured output of segment extraction.
 type Rule struct {
@@ -132,9 +144,25 @@ type Condition struct {
 	Values []string `json:"values,omitempty"`
 	Value  *int     `json:"value,omitempty"`
 
-	// Event: Occurred=true means "did X in the last WithinDays days",
-	// false means "did not".
+	// Event: Occurred=true means "did X in the window", false means "did
+	// not". The window is either the last WithinDays days or the calendar
+	// days From..To (both included, Istanbul time); exactly one is set.
 	Event      EventType `json:"event,omitempty"`
 	Occurred   *bool     `json:"occurred,omitempty"`
 	WithinDays *int      `json:"within_days,omitempty"`
+	From       string    `json:"from,omitempty"`
+	To         string    `json:"to,omitempty"`
+	// MinCount: "did X at least MinCount times in the window". Only with
+	// Occurred=true; nil means at least once.
+	MinCount *int `json:"min_count,omitempty"`
+	// Then: "did X in the window, and after that did (not) do Then.Event".
+	// Only with Occurred=true and without MinCount. Then.Event has no
+	// window of its own: it is checked from the X event until now.
+	Then *Then `json:"then,omitempty"`
+}
+
+// Then is the second event of a sequence condition.
+type Then struct {
+	Event    EventType `json:"event"`
+	Occurred *bool     `json:"occurred"`
 }
