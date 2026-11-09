@@ -234,7 +234,7 @@ WHERE id = $1 AND status = '`+string(StatusDraft)+`'
 RETURNING `+columns, all...)
 	c, err := scanCampaign(row)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Campaign{}, s.notDraftReason(ctx, id)
+		return Campaign{}, notDraftReason(ctx, s.db, id)
 	}
 	if err != nil {
 		return Campaign{}, fmt.Errorf("update campaign %d: %w", id, err)
@@ -244,9 +244,13 @@ RETURNING `+columns, all...)
 
 // notDraftReason explains why a "WHERE status = 'draft'" update matched no
 // row: the campaign is missing, or it has left the draft state.
-func (s *Service) notDraftReason(ctx context.Context, id int64) error {
+//
+// Inside a transaction, q must be that transaction: asking the pool for a
+// second connection while holding one deadlocks the pool when many callers
+// do it at once (TestApproveConcurrent).
+func notDraftReason(ctx context.Context, q querier, id int64) error {
 	var exists bool
-	if err := s.db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM campaigns WHERE id = $1)`, id).Scan(&exists); err != nil {
+	if err := q.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM campaigns WHERE id = $1)`, id).Scan(&exists); err != nil {
 		return fmt.Errorf("check campaign %d: %w", id, err)
 	}
 	if !exists {

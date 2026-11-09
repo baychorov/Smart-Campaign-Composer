@@ -160,7 +160,7 @@ func (s *Service) DeleteDraft(ctx context.Context, id int64) error {
 		return fmt.Errorf("delete campaign %d: %w", id, err)
 	}
 	if tag.RowsAffected() == 0 {
-		return s.notDraftReason(ctx, id)
+		return notDraftReason(ctx, s.db, id)
 	}
 	return nil
 }

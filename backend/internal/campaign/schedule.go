@@ -43,7 +43,7 @@ UPDATE campaigns SET status = $2, updated_at = $3
 WHERE id = $1 AND status = $4
 RETURNING `+columns, id, StatusCancelled, s.now(), StatusScheduled))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Campaign{}, s.notScheduledReason(ctx, id)
+		return Campaign{}, notScheduledReason(ctx, tx, id)
 	}
 	if err != nil {
 		return Campaign{}, fmt.Errorf("cancel campaign %d: %w", id, err)
@@ -68,10 +68,11 @@ RETURNING `+columns, id, StatusCancelled, s.now(), StatusScheduled))
 }
 
 // notScheduledReason explains why "WHERE status = 'scheduled'" matched no
-// row: the campaign is missing, or it is in another state.
-func (s *Service) notScheduledReason(ctx context.Context, id int64) error {
+// row: the campaign is missing, or it is in another state. Inside a
+// transaction, q must be that transaction (see notDraftReason).
+func notScheduledReason(ctx context.Context, q querier, id int64) error {
 	var exists bool
-	if err := s.db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM campaigns WHERE id = $1)`, id).Scan(&exists); err != nil {
+	if err := q.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM campaigns WHERE id = $1)`, id).Scan(&exists); err != nil {
 		return fmt.Errorf("check campaign %d: %w", id, err)
 	}
 	if !exists {

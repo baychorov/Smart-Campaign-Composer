@@ -52,6 +52,23 @@ func seededPool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
+// smallPool opens a second pool on pool's database with at most maxConns
+// connections. pgxpool's default size is max(4, NumCPU), so concurrency
+// tests that need a second connection per caller pass on a many-core
+// machine and deadlock on a 2-core CI runner; a fixed small pool makes
+// that failure show up everywhere.
+func smallPool(t *testing.T, pool *pgxpool.Pool, maxConns int32) *pgxpool.Pool {
+	t.Helper()
+	cfg := pool.Config()
+	cfg.MaxConns = maxConns
+	p, err := pgxpool.NewWithConfig(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("small pool: %v", err)
+	}
+	t.Cleanup(p.Close)
+	return p
+}
+
 // draft creates a campaign whose rule is ruleJSON and saves msg into it.
 func draft(t *testing.T, pool *pgxpool.Pool, ruleJSON string, msg content.Message) (*Service, Campaign) {
 	t.Helper()
@@ -187,9 +204,14 @@ WHERE d.campaign_id = $1
 // TestApproveConcurrent: many approvals of one draft at the same time, like
 // a double click. Exactly one wins; the rest get ErrNotDraft and write
 // nothing (D-DEDUP layer 1).
+//
+// The service gets a pool smaller than the number of callers: a loser that
+// needed a second connection while holding its transaction's one would
+// deadlock the pool (seen on a 2-core CI runner, PLAN step 15b).
 func TestApproveConcurrent(t *testing.T) {
 	pool := seededPool(t)
-	svc, c := draft(t, pool, caseRule, goodMessage)
+	_, c := draft(t, pool, caseRule, goodMessage)
+	svc := NewService(smallPool(t, pool, 2), llm.NewFake(), func() time.Time { return testNow })
 
 	const n = 8
 	var wg sync.WaitGroup

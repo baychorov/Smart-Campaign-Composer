@@ -89,7 +89,7 @@ SET status = $2, approved_at = $3, updated_at = $3, send_sms = $4, send_email = 
 WHERE id = $1 AND status = $6
 RETURNING `+columns, id, status, now, req.SMS, req.Email, StatusDraft, req.SendAt))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Campaign{}, Snapshot{}, s.notDraftReason(ctx, id)
+		return Campaign{}, Snapshot{}, notDraftReason(ctx, tx, id)
 	}
 	if err != nil {
 		return Campaign{}, Snapshot{}, fmt.Errorf("approve campaign %d: %w", id, err)

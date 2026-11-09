@@ -189,6 +189,48 @@ func TestCancel(t *testing.T) {
 	}
 }
 
+// TestCancelConcurrent: many cancels of one scheduled campaign at the same
+// time, on a pool smaller than the number of callers (see
+// TestApproveConcurrent). Exactly one wins; the rest get ErrNotScheduled.
+func TestCancelConcurrent(t *testing.T) {
+	pool := seededPool(t)
+	_, c, _ := scheduled(t, pool, testNow.Add(time.Hour))
+	svc := NewService(smallPool(t, pool, 2), llm.NewFake(), func() time.Time { return testNow })
+
+	const n = 8
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	start := make(chan struct{})
+	for i := range n {
+		wg.Go(func() {
+			<-start
+			_, errs[i] = svc.Cancel(t.Context(), c.ID)
+		})
+	}
+	close(start)
+	wg.Wait()
+
+	wins := 0
+	for i, err := range errs {
+		switch {
+		case err == nil:
+			wins++
+		case errors.Is(err, ErrNotScheduled):
+		default:
+			t.Errorf("cancel %d: unexpected error %v", i, err)
+		}
+	}
+	if wins != 1 {
+		t.Fatalf("%d cancels succeeded, want exactly 1", wins)
+	}
+	if got := statusOf(t, pool, c.ID); got != StatusCancelled {
+		t.Fatalf("status %s, want cancelled", got)
+	}
+	if sms, email := deliveryCounts(t, pool, c.ID); sms+email != 0 {
+		t.Fatalf("%d deliveries left after cancel", sms+email)
+	}
+}
+
 // The two orders of the race, made deterministic by holding a row lock in
 // a transaction of our own.
 func TestCancelWhileWorkerHoldsRows(t *testing.T) {
