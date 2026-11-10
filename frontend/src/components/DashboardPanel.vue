@@ -126,7 +126,7 @@ const approvedAt = computed(() => {
             <template v-else>—</template>
           </span>
           <span class="meta-sep" aria-hidden="true"></span>
-          <template v-if="stream.state.value === 'open'">canlı, saniyede bir güncelleniyor</template>
+          <template v-if="stream.state.value === 'open'">{{ status === 'scheduled' ? 'belirlenen tarihte gönderilecek' : 'gönderiliyor' }}</template>
           <template v-else-if="stream.state.value === 'connecting'">bağlanıyor…</template>
           <template v-else-if="progress?.done">{{ status === 'cancelled' ? 'kampanya iptal edildi' : 'gönderim tamamlandı' }}</template>
           <template v-else-if="stream.state.value === 'error'">
@@ -138,8 +138,7 @@ const approvedAt = computed(() => {
         </p>
         <div v-if="status === 'scheduled'" class="note note-info schedule" data-test="scheduled">
           <span>
-            Gönderim <b>{{ campaign.send_at ? formatTurkey(campaign.send_at) : '—' }}</b> (Türkiye saati) tarihinde başlayacak.
-            Kitle onay anında hesaplandı; mesajlar o zamana kadar kuyrukta bekliyor.
+            Gönderim <b>{{ campaign.send_at ? formatTurkey(campaign.send_at) : '—' }}</b> tarihinde başlayacak.
           </span>
           <button v-if="!confirmingCancel" type="button" class="btn btn-sm" data-test="cancel" @click="confirmingCancel = true">
             Zamanlamayı iptal et
@@ -234,15 +233,15 @@ const approvedAt = computed(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.875rem 2.25rem;
+  gap: 0.875rem 3.25rem;
 }
 .kpi-value {
-  font-size: 1.625rem;
+  font-size: 1.3125rem;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 .of {
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
   color: var(--muted);
   font-weight: 400;
 }

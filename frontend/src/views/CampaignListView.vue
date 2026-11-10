@@ -294,7 +294,7 @@ onActivated(() => {
               Oluşturuldu: {{ formatDate(details[it.id]!.created_at) }}
               <template v-if="details[it.id]!.approved_at"> · Onaylandı: {{ formatDate(details[it.id]!.approved_at!) }}</template>
               <template v-if="it.status !== 'draft' && details[it.id]!.send_at">
-                · Planlanan gönderim: {{ formatTurkey(details[it.id]!.send_at!) }} (Türkiye saati)
+                · Planlanan gönderim: {{ formatTurkey(details[it.id]!.send_at!) }}
               </template>
             </p>
 
