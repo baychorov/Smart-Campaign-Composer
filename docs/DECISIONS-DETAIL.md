@@ -241,6 +241,8 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - **Elenen:** Render sırasında Türkçe ek üretmek (ses uyumu kuralları, gereksiz karmaşıklık).
   - **Ölçüm:** `make eval` yalnızca kural çıkarmayı ölçer; içerik prompt'u için ayrı, isteğe bağlı bir canlı kontrol eklendi (`TestContentVariablesLive`, en fazla 3 çağrı, `make test-live`'a dahil değil). Base brief ile bir çalıştırma: 1 çağrı, onarımsız; mesajda `{{city}}` ve şehir adı yok. Tek çalıştırma bir ölçüm değil, nokta kontrolüdür.
 
+- **Güncelleme (2026-11-11, teslim öncesi denetim): Çıkma metni.** İçerik prompt'u modele "çıkma metni ekleme, sistem ekliyor" diyordu, ama sistem hiçbir yerde ret/çıkış bilgisi eklemiyor. Prompt artık yalnızca "çıkma metni ekleme" diyor. Bu bilginin eklenmemesi bilinen bir sınır olarak `DECISIONS.md`'de yazılı. Gerçek bir sistemde gönderim sırasında her mesajın sonuna otomatik eklenmeli ve uzunluk bütçesinde hesaba katılmalıdır.
+
 ## D-DEDUP: "Aynı kişiye aynı mesaj iki kez gitmez" (R-SEND-3)
 
 - **Karar:** "Aynı mesaj" kampanya + kişi + kanal olarak tanımlanır. Dört katmanlı savunma:
