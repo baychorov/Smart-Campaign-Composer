@@ -104,7 +104,9 @@ const reasons = computed(() =>
 )
 
 async function approve() {
-  if (!campaign.value) return
+  // A second click before the button is disabled on screen must not send
+  // a second approval (the backend would refuse it with 409 anyway).
+  if (!campaign.value || approving.value) return
   approving.value = true
   approveIssues.value = []
   approveError.value = null

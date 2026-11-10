@@ -128,6 +128,21 @@ describe('CampaignView', () => {
     expect(w.get('[data-test="status"]').text()).toBe('Taslak')
   })
 
+  it('sends one approval for a quick double click', async () => {
+    const draft = makeCampaign({ message: goodMessage, content_validation: validValidation })
+    const calls = fakeFetch({
+      'GET /api/campaigns/7': () => ({ json: { campaign: draft } }),
+      'POST /api/campaigns/7/approve': () => ({ json: { campaign: { ...draft, status: 'approved' }, snapshot: { sms: 111, email: 118 } } }),
+    })
+    const w = mountView()
+    await flushPromises()
+    const button = w.get('[data-test="approve"]').element as HTMLButtonElement
+    button.click() // two clicks in the same tick: the button is not disabled yet
+    button.click()
+    await flushPromises()
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(1)
+  })
+
   it('fills the send time from the brief and schedules with it', async () => {
     vi.useFakeTimers({ now: new Date('2026-11-01T09:00:00Z'), toFake: ['Date'] })
     const draft = makeCampaign({ message: goodMessage, content_validation: validValidation, send_at: '2026-11-02T07:00:00Z' })
