@@ -25,6 +25,7 @@ import (
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/platform"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/platform/pgtest"
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/seed"
+	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/segment"
 )
 
 // The campaign routes end to end: HTTP → campaign.Service → Postgres, with
@@ -505,7 +506,7 @@ func TestCampaignListAndDelete(t *testing.T) {
 	}
 
 	// Filter and paging.
-	status, out = api.do("GET", "/api/campaigns?filter=sent", "")
+	status, out = api.do("GET", "/api/campaigns?status=approved,sending,completed", "")
 	if status != http.StatusOK || fmt.Sprint(listIDs(out)) != fmt.Sprint([]any{sent["id"]}) {
 		t.Fatalf("sent filter: %d %v", status, out)
 	}
@@ -517,7 +518,20 @@ func TestCampaignListAndDelete(t *testing.T) {
 	if status != http.StatusOK || fmt.Sprint(listIDs(out)) != fmt.Sprint([]any{draft1["id"]}) {
 		t.Fatalf("second page: %d %v", status, out)
 	}
-	for _, q := range []string{"?filter=archived", "?before=0", "?before=x", "?limit=-1"} {
+	status, out = api.do("GET", "/api/campaigns?id="+fmtAny(draft1["id"])+"&status=draft,invalid", "")
+	if status != http.StatusOK || fmt.Sprint(listIDs(out)) != fmt.Sprint([]any{draft1["id"]}) {
+		t.Fatalf("number filter: %d %v", status, out)
+	}
+	// Days are Turkey time and both ends are included: today's campaigns are in.
+	today := seedNow.In(segment.Istanbul).Format(time.DateOnly)
+	if status, out = api.do("GET", "/api/campaigns?from="+today+"&to="+today, ""); status != http.StatusOK || len(listIDs(out)) != 3 {
+		t.Fatalf("today: %d %v", status, out)
+	}
+	if status, out = api.do("GET", "/api/campaigns?to=2020-01-01", ""); status != http.StatusOK || len(listIDs(out)) != 0 {
+		t.Fatalf("before 2020: %d %v", status, out)
+	}
+	for _, q := range []string{"?status=archived", "?before=0", "?before=x", "?limit=-1", "?id=0", "?id=x",
+		"?from=10.11.2026", "?from=2026-11-10&to=2026-11-09"} {
 		if status, out = api.do("GET", "/api/campaigns"+q, ""); status != http.StatusBadRequest || out["error"] != "invalid_query" {
 			t.Errorf("%s: %d %v", q, status, out)
 		}
@@ -582,6 +596,23 @@ func TestScheduleAndCancel(t *testing.T) {
 		t.Fatalf("scheduled campaign %v %v", c["status"], c["send_at"])
 	}
 
+	// Edit: back to a draft that keeps its send time as the suggestion, then
+	// approved again.
+	status, out = api.do("POST", path+"/reopen", "")
+	if status != http.StatusOK {
+		t.Fatalf("reopen: %d %v", status, out)
+	}
+	if c = campaignOf(t, out); c["status"] != "draft" || c["approved_at"] != nil || !sameInstant(c["send_at"], "2026-06-17T06:30:00Z") {
+		t.Fatalf("reopened: status %v, approved_at %v, send_at %v", c["status"], c["approved_at"], c["send_at"])
+	}
+	if status, out = api.do("POST", path+"/reopen", ""); status != http.StatusConflict || out["error"] != "not_scheduled" {
+		t.Fatalf("reopen a draft: %d %v", status, out)
+	}
+	status, out = api.do("POST", path+"/approve", `{"channels":{"sms":true,"email":true},"send_at":"2026-06-17T09:30:00+03:00"}`)
+	if status != http.StatusOK || campaignOf(t, out)["status"] != "scheduled" {
+		t.Fatalf("approve again: %d %v", status, out)
+	}
+
 	// Cancel once; the second time and an unscheduled campaign get 409.
 	status, out = api.do("POST", path+"/cancel", "")
 	if status != http.StatusOK || campaignOf(t, out)["status"] != "cancelled" {
@@ -599,6 +630,12 @@ func TestScheduleAndCancel(t *testing.T) {
 	}
 	if status, _ = api.do("POST", "/api/campaigns/999999/cancel", ""); status != http.StatusNotFound {
 		t.Fatalf("cancel missing: %d", status)
+	}
+	if status, out = api.do("POST", path+"/reopen", ""); status != http.StatusConflict || out["error"] != "not_scheduled" {
+		t.Fatalf("reopen a cancelled campaign: %d %v", status, out)
+	}
+	if status, _ = api.do("POST", "/api/campaigns/999999/reopen", ""); status != http.StatusNotFound {
+		t.Fatalf("reopen missing: %d", status)
 	}
 
 	// The dashboard stream of a cancelled campaign ends at once.

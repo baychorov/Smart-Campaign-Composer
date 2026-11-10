@@ -27,6 +27,9 @@ func approved(t *testing.T, svc *Service, ruleJSON string) (Campaign, Snapshot) 
 	return c, snap
 }
 
+// sentStatuses is the list's "Gönderilenler" preset.
+var sentStatuses = []string{string(StatusApproved), string(StatusSending), string(StatusCompleted)}
+
 func ids(items []ListItem) []int64 {
 	out := make([]int64, len(items))
 	for i, it := range items {
@@ -50,7 +53,7 @@ WHERE id IN (SELECT id FROM deliveries WHERE campaign_id = $1 AND channel = 'sms
 	}
 
 	t.Run("all, newest first", func(t *testing.T) {
-		page, err := svc.List(t.Context(), FilterAll, 0, 0)
+		page, err := svc.List(t.Context(), ListQuery{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -63,7 +66,7 @@ WHERE id IN (SELECT id FROM deliveries WHERE campaign_id = $1 AND channel = 'sms
 	})
 
 	t.Run("delivery counts", func(t *testing.T) {
-		page, err := svc.List(t.Context(), FilterSent, 0, 0)
+		page, err := svc.List(t.Context(), ListQuery{Statuses: sentStatuses})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -84,7 +87,7 @@ WHERE id IN (SELECT id FROM deliveries WHERE campaign_id = $1 AND channel = 'sms
 	})
 
 	t.Run("drafts have no counts", func(t *testing.T) {
-		page, err := svc.List(t.Context(), FilterDraft, 0, 0)
+		page, err := svc.List(t.Context(), ListQuery{Statuses: []string{ListDraft}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -99,7 +102,7 @@ WHERE id IN (SELECT id FROM deliveries WHERE campaign_id = $1 AND channel = 'sms
 	})
 
 	t.Run("keyset pages", func(t *testing.T) {
-		first, err := svc.List(t.Context(), FilterAll, 0, 2)
+		first, err := svc.List(t.Context(), ListQuery{Limit: 2})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -108,7 +111,7 @@ WHERE id IN (SELECT id FROM deliveries WHERE campaign_id = $1 AND channel = 'sms
 		}
 		// A campaign created between pages does not shift the next page.
 		_, _ = draft(t, pool, istanbulRule, goodMessage)
-		second, err := svc.List(t.Context(), FilterAll, first.NextBefore, 2)
+		second, err := svc.List(t.Context(), ListQuery{Before: first.NextBefore, Limit: 2})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -118,15 +121,15 @@ WHERE id IN (SELECT id FROM deliveries WHERE campaign_id = $1 AND channel = 'sms
 	})
 
 	t.Run("limit is clamped", func(t *testing.T) {
-		page, err := svc.List(t.Context(), FilterAll, 0, 10_000)
+		page, err := svc.List(t.Context(), ListQuery{Limit: 10_000})
 		if err != nil || len(page.Items) != 4 {
 			t.Fatalf("items %d err %v", len(page.Items), err)
 		}
 	})
 
-	t.Run("unknown filter", func(t *testing.T) {
-		if _, err := svc.List(t.Context(), "archived", 0, 0); !errors.Is(err, ErrBadFilter) {
-			t.Fatalf("err %v, want ErrBadFilter", err)
+	t.Run("unknown status", func(t *testing.T) {
+		if _, err := svc.List(t.Context(), ListQuery{Statuses: []string{"archived"}}); !errors.Is(err, ErrBadQuery) {
+			t.Fatalf("err %v, want ErrBadQuery", err)
 		}
 	})
 }
@@ -143,7 +146,7 @@ func TestListApprovable(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 
-	page, err := svc.List(t.Context(), FilterDraft, 0, 0)
+	page, err := svc.List(t.Context(), ListQuery{Statuses: []string{ListDraft, ListInvalid}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,6 +158,94 @@ func TestListApprovable(t *testing.T) {
 	if !maps.Equal(got, want) {
 		t.Fatalf("approvable %v, want %v", got, want)
 	}
+}
+
+// TestListFilters: every list status, the campaign number and the date
+// range, alone and together. The SQL split of drafts into ListDraft and
+// ListInvalid must agree with Approvable, which the UI shows.
+func TestListFilters(t *testing.T) {
+	pool := seededPool(t)
+	svc, ok := draft(t, pool, istanbulRule, goodMessage)
+	_, partial := draft(t, pool, partialRule, goodMessage)
+	bad := NewService(pool, llm.NewFake(llm.Text(rejectedRule)), func() time.Time { return testNow })
+	invalid, _, err := bad.Create(t.Context(), "not a campaign")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	sent, _ := approved(t, svc, caseRule)
+	at := testNow.Add(24 * time.Hour)
+	_, sc := draft(t, pool, caseRule, goodMessage)
+	if _, _, err := svc.Approve(t.Context(), sc.ID, ApproveRequest{SMS: true, SendAt: &at}); err != nil {
+		t.Fatalf("schedule: %v", err)
+	}
+	_, cc := draft(t, pool, caseRule, goodMessage)
+	if _, _, err := svc.Approve(t.Context(), cc.ID, ApproveRequest{SMS: true, SendAt: &at}); err != nil {
+		t.Fatalf("schedule: %v", err)
+	}
+	if _, err := svc.Cancel(t.Context(), cc.ID); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	// The list date is the approval time, or the creation time of a draft:
+	// move the partial draft and the sent campaign 10 days back.
+	old := testNow.AddDate(0, 0, -10)
+	if _, err := pool.Exec(t.Context(), `UPDATE campaigns SET created_at = $2 WHERE id = $1`, partial.ID, old); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(t.Context(), `UPDATE campaigns SET created_at = $2, approved_at = $2 WHERE id = $1`, sent.ID, old); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		q    ListQuery
+		want []int64
+	}{
+		{"all", ListQuery{}, []int64{cc.ID, sc.ID, sent.ID, invalid.ID, partial.ID, ok.ID}},
+		{"approvable drafts", ListQuery{Statuses: []string{ListDraft}}, []int64{partial.ID, ok.ID}},
+		{"invalid drafts", ListQuery{Statuses: []string{ListInvalid}}, []int64{invalid.ID}},
+		{"both kinds of draft", ListQuery{Statuses: []string{ListDraft, ListInvalid}}, []int64{invalid.ID, partial.ID, ok.ID}},
+		{"sent preset", ListQuery{Statuses: sentStatuses}, []int64{sent.ID}},
+		{"scheduled", ListQuery{Statuses: []string{string(StatusScheduled)}}, []int64{sc.ID}},
+		{"cancelled", ListQuery{Statuses: []string{string(StatusCancelled)}}, []int64{cc.ID}},
+		{"invalid or cancelled", ListQuery{Statuses: []string{ListInvalid, string(StatusCancelled)}}, []int64{cc.ID, invalid.ID}},
+		{"campaign number", ListQuery{ID: sc.ID}, []int64{sc.ID}},
+		{"number outside the statuses", ListQuery{ID: sc.ID, Statuses: []string{ListDraft}}, []int64{}},
+		{"from", ListQuery{From: testNow.AddDate(0, 0, -1)}, []int64{cc.ID, sc.ID, invalid.ID, ok.ID}},
+		{"to", ListQuery{To: testNow.AddDate(0, 0, -1)}, []int64{sent.ID, partial.ID}},
+		{"range and status", ListQuery{From: old, To: old.Add(time.Hour), Statuses: []string{ListDraft}}, []int64{partial.ID}},
+		{"paged", ListQuery{Statuses: []string{ListDraft, ListInvalid}, Before: invalid.ID}, []int64{partial.ID, ok.ID}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			page, err := svc.List(t.Context(), tt.q)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := ids(page.Items); !slices.Equal(got, tt.want) {
+				t.Fatalf("ids %v, want %v", got, tt.want)
+			}
+		})
+	}
+
+	t.Run("the draft split agrees with Approvable", func(t *testing.T) {
+		for st, want := range map[string]bool{ListDraft: true, ListInvalid: false} {
+			page, err := svc.List(t.Context(), ListQuery{Statuses: []string{st}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, it := range page.Items {
+				if it.Status != StatusDraft || it.Approvable != want {
+					t.Errorf("%s: campaign %d status %s approvable %v", st, it.ID, it.Status, it.Approvable)
+				}
+			}
+		}
+	})
+
+	t.Run("empty date range", func(t *testing.T) {
+		if _, err := svc.List(t.Context(), ListQuery{From: testNow, To: testNow}); !errors.Is(err, ErrBadQuery) {
+			t.Fatalf("err %v, want ErrBadQuery", err)
+		}
+	})
 }
 
 func TestDeleteDraft(t *testing.T) {

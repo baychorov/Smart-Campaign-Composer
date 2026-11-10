@@ -17,6 +17,7 @@ func TestCanTransition(t *testing.T) {
 		{StatusApproved, StatusSending}:    true,
 		{StatusScheduled, StatusSending}:   true,
 		{StatusScheduled, StatusCancelled}: true,
+		{StatusScheduled, StatusDraft}:     true,
 		{StatusSending, StatusCompleted}:   true,
 		{StatusCompleted, StatusSending}:   true, // manual retry of failed messages
 	}

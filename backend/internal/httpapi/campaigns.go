@@ -3,8 +3,11 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/campaign"
@@ -121,9 +124,9 @@ func (s *Server) writeCampaignError(w http.ResponseWriter, err error) {
 	case errors.Is(err, campaign.ErrNotDraft):
 		writeError(w, http.StatusConflict, "not_draft", "Kampanya artık taslak değil; değiştirilemez veya tekrar onaylanamaz.")
 	case errors.Is(err, campaign.ErrNotScheduled):
-		writeError(w, http.StatusConflict, "not_scheduled", "Yalnızca zamanlanmış ve henüz gönderilmeye başlanmamış bir kampanya iptal edilebilir.")
+		writeError(w, http.StatusConflict, "not_scheduled", "Kampanya artık zamanlanmış değil; gönderimi başlamış ya da iptal edilmiş olabilir.")
 	case errors.Is(err, campaign.ErrSendingStarted):
-		writeError(w, http.StatusConflict, "sending_started", "Gönderim bu sırada başladı; kampanya iptal edilemedi.")
+		writeError(w, http.StatusConflict, "sending_started", "Gönderim bu sırada başladı; kampanya değiştirilemedi.")
 	case errors.Is(err, campaign.ErrNotCompleted):
 		writeError(w, http.StatusConflict, "not_completed", "Başarısız mesajlar ancak gönderim tamamlandıktan sonra tekrar gönderilebilir.")
 	case errors.Is(err, campaign.ErrNothingToRetry):
@@ -216,30 +219,22 @@ func (s *Server) getCampaign(w http.ResponseWriter, r *http.Request) {
 	s.writeCampaign(w, r, http.StatusOK, c, nil)
 }
 
-// listCampaigns: GET /api/campaigns?filter=all|draft|sent&before=<id>&limit=<n>.
-// Newest first; next_before is the before value of the next page, or null.
-// Each item is the collapsed row: no brief, rule or message (GET {id} has
-// them).
+// listCampaigns: GET /api/campaigns?status=<s>,<s>&id=<n>&from=<day>&to=<day>&before=<id>&limit=<n>.
+// Every parameter is optional. status is a comma-separated list of list
+// statuses (campaign.ListDraft, campaign.ListInvalid and the other campaign
+// statuses); from and to are days (2026-11-10) in Turkey time, both
+// included. Newest first; next_before is the before value of the next page,
+// or null. Each item is the collapsed row: no brief, rule or message (GET
+// {id} has them).
 func (s *Server) listCampaigns(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	var before int64
-	var limit int
-	var err error
-	if v := q.Get("before"); v != "" {
-		if before, err = strconv.ParseInt(v, 10, 64); err != nil || before <= 0 {
-			writeError(w, http.StatusBadRequest, "invalid_query", "before pozitif bir kampanya id'si olmalı.")
-			return
-		}
+	lq, msg := parseListQuery(r.URL.Query())
+	if msg != "" {
+		writeError(w, http.StatusBadRequest, "invalid_query", msg)
+		return
 	}
-	if v := q.Get("limit"); v != "" {
-		if limit, err = strconv.Atoi(v); err != nil || limit <= 0 {
-			writeError(w, http.StatusBadRequest, "invalid_query", "limit pozitif bir sayı olmalı.")
-			return
-		}
-	}
-	page, err := s.cfg.Campaigns.List(r.Context(), campaign.ListFilter(q.Get("filter")), before, limit)
-	if errors.Is(err, campaign.ErrBadFilter) {
-		writeError(w, http.StatusBadRequest, "invalid_query", "filter all, draft veya sent olmalı.")
+	page, err := s.cfg.Campaigns.List(r.Context(), lq)
+	if errors.Is(err, campaign.ErrBadQuery) {
+		writeError(w, http.StatusBadRequest, "invalid_query", "Filtre geçersiz.")
 		return
 	}
 	if err != nil {
@@ -251,6 +246,54 @@ func (s *Server) listCampaigns(w http.ResponseWriter, r *http.Request) {
 		next = &page.NextBefore
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"campaigns": nonNil(page.Items), "next_before": next})
+}
+
+// parseListQuery reads the list query parameters. msg is not empty when one
+// cannot be read; unknown statuses are refused by campaign.List.
+func parseListQuery(v url.Values) (campaign.ListQuery, string) {
+	var q campaign.ListQuery
+	positive := func(name string) (int64, bool) {
+		n, err := strconv.ParseInt(v.Get(name), 10, 64)
+		return n, err == nil && n > 0
+	}
+	var ok bool
+	if v.Get("before") != "" {
+		if q.Before, ok = positive("before"); !ok {
+			return q, "before pozitif bir kampanya id'si olmalı."
+		}
+	}
+	if v.Get("limit") != "" {
+		n, ok := positive("limit")
+		if !ok || n > math.MaxInt32 {
+			return q, "limit pozitif bir sayı olmalı."
+		}
+		q.Limit = int(n)
+	}
+	if v.Get("id") != "" {
+		if q.ID, ok = positive("id"); !ok {
+			return q, "id pozitif bir kampanya numarası olmalı."
+		}
+	}
+	if st := v.Get("status"); st != "" {
+		q.Statuses = strings.Split(st, ",")
+	}
+	// A day in Turkey time: from is its start, to the start of the next day.
+	day := func(name string) (time.Time, bool) {
+		t, err := time.ParseInLocation(time.DateOnly, v.Get(name), segment.Istanbul)
+		return t, err == nil
+	}
+	if v.Get("from") != "" {
+		if q.From, ok = day("from"); !ok {
+			return q, "from bir gün olmalı (YYYY-AA-GG)."
+		}
+	}
+	if v.Get("to") != "" {
+		if q.To, ok = day("to"); !ok {
+			return q, "to bir gün olmalı (YYYY-AA-GG)."
+		}
+		q.To = q.To.AddDate(0, 0, 1)
+	}
+	return q, ""
 }
 
 // deleteCampaign: DELETE /api/campaigns/{id}. Only a draft can be deleted;
@@ -368,6 +411,23 @@ func (s *Server) cancelCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cfg.Log.Info("scheduled campaign cancelled", "campaign_id", id)
+	s.writeCampaign(w, r, http.StatusOK, c, nil)
+}
+
+// reopenCampaign: POST /api/campaigns/{id}/reopen. A scheduled campaign
+// whose sending has not started goes back to draft for editing; its
+// deliveries are deleted and it must be approved again (409 otherwise).
+func (s *Server) reopenCampaign(w http.ResponseWriter, r *http.Request) {
+	id, ok := campaignID(w, r)
+	if !ok {
+		return
+	}
+	c, err := s.cfg.Campaigns.Reopen(r.Context(), id)
+	if err != nil {
+		s.writeCampaignError(w, err)
+		return
+	}
+	s.cfg.Log.Info("scheduled campaign reopened as draft", "campaign_id", id)
 	s.writeCampaign(w, r, http.StatusOK, c, nil)
 }
 

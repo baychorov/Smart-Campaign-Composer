@@ -36,9 +36,10 @@ const MaxScheduleLead = 30 * 24 * time.Hour
 // UPDATE ... WHERE status = <from>, so of two concurrent requests only one
 // can make the move.
 var transitions = map[Status][]Status{
-	StatusDraft:     {StatusApproved, StatusScheduled},
-	StatusApproved:  {StatusSending},
-	StatusScheduled: {StatusSending, StatusCancelled},
+	StatusDraft:    {StatusApproved, StatusScheduled},
+	StatusApproved: {StatusSending},
+	// Back to draft: the marketer edits a scheduled campaign (Reopen).
+	StatusScheduled: {StatusSending, StatusCancelled, StatusDraft},
 	StatusSending:   {StatusCompleted},
 	// Manual retry of failed messages (RetryFailed).
 	StatusCompleted: {StatusSending},
@@ -75,10 +76,11 @@ var (
 	// ErrNotDraft: the campaign is no longer a draft, so it cannot be edited
 	// or approved again.
 	ErrNotDraft = errors.New("campaign is not a draft")
-	// ErrNotScheduled: only a scheduled campaign can be cancelled.
+	// ErrNotScheduled: only a scheduled campaign can be cancelled or
+	// reopened for editing.
 	ErrNotScheduled = errors.New("campaign is not scheduled")
 	// ErrSendingStarted: the worker took the campaign's first messages
-	// while the cancellation was running; sending wins.
+	// while the cancellation (or reopening) was running; sending wins.
 	ErrSendingStarted = errors.New("campaign sending has started")
 	// ErrNotCompleted: failed messages can be retried only after the
 	// campaign has completed.
