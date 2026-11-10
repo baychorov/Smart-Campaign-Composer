@@ -96,7 +96,7 @@ Zamanlanmış gönderim bu ölçümden sonra eklendi; ilgili iki brief ayrıca y
 
 ## Bonus özellikler
 
-- **Zamanlanmış gönderim:** Brief'teki gönderim zamanı onay ekranına dolu gelir, değiştirilebilir ve gönderim başlayana kadar iptal edilebilir.
+- **Zamanlanmış gönderim:** Brief'teki gönderim zamanı onay ekranına dolu gelir, değiştirilebilir; kampanya gönderim başlayana kadar düzenlenebilir veya iptal edilebilir.
 - **CI:** GitHub Actions her push ve pull request'te `make lint`, `make test` ve `make smoke` çalıştırır.
 
 ## Sınırlar
@@ -108,8 +108,11 @@ Zamanlanmış gönderim bu ölçümden sonra eklendi; ilgili iki brief ayrıca y
 - SMS sınırı case'teki gibi 160 karakterdir. Gerçekte Türkçe karakterli bir SMS 70
   karakterde bölünür; gerekçe `DECISIONS.md` D-CONTENT'te.
 - Zamanlanmış gönderim şu andan sonraki herhangi bir an ile 30 gün arasıdır; gönderim başladıktan sonra durdurulamaz.
-- Mock provider kayıtlarını bellekte tutar; yeniden başlarsa istatistikleri sıfırlanır.
-- Kullanıcının diline göre içerik yapılmadı; mesajlar Türkçe üretilir.
+- Mock provider kayıtlarını bellekte tutar; yeniden başlarsa istatistikleri ve idempotency kayıtları
+  sıfırlanır. Tekrar gönderimde çift mesajı önleyen son katman bu kayıtlardır (gerçek bir provider
+  bunları kalıcı tutar). `make seed-reset` gönderim id'lerini baştan başlattığı için ardından mock
+  provider da yeniden başlatılmalıdır (`docker compose restart mockprovider`).
+- Bonuslardan A/B varyantları ve kullanıcının diline göre içerik yapılmadı; mesajlar Türkçe üretilir.
 
 ## Dokümanlar
 
