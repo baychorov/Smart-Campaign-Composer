@@ -80,6 +80,37 @@ async function cancelSchedule() {
   }
 }
 
+// Sending failed messages again (PLAN step 15e), in two steps, once the
+// campaign has completed. The server requeues the same rows, so a message
+// the provider had in fact delivered is not sent twice. The stream closed
+// at "done", so it is opened again to follow the new sending.
+const failedCount = computed(() => sum('failed'))
+const canRetry = computed(() => status.value === 'completed' && progress.value?.done === true && failedCount.value > 0)
+const confirmingRetry = ref(false)
+const retrying = ref(false)
+const retryError = ref<string | null>(null)
+
+async function retryFailed() {
+  retrying.value = true
+  retryError.value = null
+  try {
+    const out = await api.retryFailed(props.campaign.id)
+    confirmingRetry.value = false
+    // Until the first new event, the last one would still say completed.
+    if (progress.value) progress.value = { ...progress.value, status: out.campaign.status, done: false }
+    emit('update', out.campaign)
+    connect()
+  } catch (e) {
+    const err = toApiError(e)
+    retryError.value = err.message
+    confirmingRetry.value = false
+    // Someone else retried, or nothing is left: show the current state.
+    if (err.code === 'not_completed' || err.code === 'nothing_to_retry') connect()
+  } finally {
+    retrying.value = false
+  }
+}
+
 // Date and time are shown as separate parts so they do not run together.
 const approvedAt = computed(() => {
   if (!props.campaign.approved_at) return null
@@ -153,6 +184,18 @@ const approvedAt = computed(() => {
           Kampanya gönderimden önce iptal edildi; hiç mesaj gönderilmedi.
         </p>
         <p v-if="cancelError" class="note note-bad" role="alert">{{ cancelError }}</p>
+        <div v-if="canRetry" class="note note-plain schedule" data-test="retry">
+          <span>{{ formatCount(failedCount) }} mesaj gönderilemedi.</span>
+          <button v-if="!confirmingRetry" type="button" class="btn btn-sm" data-test="retry-failed" @click="confirmingRetry = true">
+            Başarısızları tekrar gönder
+          </button>
+          <span v-else class="confirm">
+            Yalnızca başarısız mesajlar tekrar denenecek; teslim edilmiş olanlar ikinci kez gönderilmez.
+            <button type="button" class="btn btn-sm btn-primary" :disabled="retrying" data-test="confirm-retry" @click="retryFailed">Tekrar gönder</button>
+            <button type="button" class="btn btn-sm" :disabled="retrying" @click="confirmingRetry = false">Vazgeç</button>
+          </span>
+        </div>
+        <p v-if="retryError" class="note note-bad" role="alert">{{ retryError }}</p>
       </div>
     </section>
 

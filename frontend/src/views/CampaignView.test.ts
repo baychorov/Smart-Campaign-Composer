@@ -192,6 +192,87 @@ describe('CampaignView', () => {
     expect(w.get('[data-test="status"]').text()).toBe('Gönderiliyor')
   })
 
+  const failedDone = () =>
+    progress({
+      status: 'completed',
+      done: true,
+      channels: { sms: { total: 111, pending: 0, sending: 0, sent: 107, failed: 3, skipped: 1 } },
+      top_errors: [{ error: 'http 500, gave up after 5 attempts', count: 3 }],
+    })
+
+  it('sends the failed messages again after confirmation and follows the new sending', async () => {
+    const done = makeCampaign({ status: 'completed', approved_at: '2026-11-07T10:00:00Z', message: goodMessage })
+    const calls = fakeFetch({
+      'GET /api/campaigns/7': () => ({ json: { campaign: done } }),
+      'POST /api/campaigns/7/retry-failed': () => ({ json: { campaign: { ...done, status: 'sending' }, requeued: 3 } }),
+    })
+    const w = mountView()
+    await flushPromises()
+    const first = FakeEventSource.last()
+    first.open()
+    first.emit('progress', failedDone())
+    await flushPromises()
+
+    expect(w.get('[data-test="retry"]').text()).toContain('3 mesaj gönderilemedi.')
+    await w.get('[data-test="retry-failed"]').trigger('click')
+    expect(calls.map((c) => c.path)).not.toContain('/api/campaigns/7/retry-failed')
+    await w.get('[data-test="confirm-retry"]').trigger('click')
+    await flushPromises()
+
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toContain('POST /api/campaigns/7/retry-failed')
+    expect(w.get('[data-test="status"]').text()).toBe('Gönderiliyor')
+    expect(w.find('[data-test="retry"]').exists()).toBe(false)
+    // The closed stream is opened again for the new sending.
+    expect(FakeEventSource.instances).toHaveLength(2)
+    const second = FakeEventSource.last()
+    expect(second).not.toBe(first)
+    expect(second.url).toBe('/api/campaigns/7/events')
+    second.open()
+    second.emit('progress', progress({ status: 'sending', channels: { sms: { total: 111, pending: 2, sending: 1, sent: 107, failed: 0, skipped: 1 } } }))
+    await flushPromises()
+    expect(w.get('[data-test="dash-status"]').text()).toBe('Gönderiliyor')
+    expect(w.find('[data-test="retry"]').exists()).toBe(false)
+  })
+
+  it('offers the retry only for a completed campaign with failed messages', async () => {
+    const done = makeCampaign({ status: 'completed', approved_at: '2026-11-07T10:00:00Z', message: goodMessage })
+    fakeFetch({ 'GET /api/campaigns/7': () => ({ json: { campaign: done } }) })
+    const w = mountView()
+    await flushPromises()
+    const es = FakeEventSource.last()
+    es.open()
+    // Still sending, with a failed row: the worker owns the rows.
+    es.emit('progress', progress())
+    await flushPromises()
+    expect(w.find('[data-test="retry"]').exists()).toBe(false)
+    // Completed without failures.
+    es.emit('progress', progress({ status: 'completed', done: true, channels: { sms: { total: 111, pending: 0, sending: 0, sent: 110, failed: 0, skipped: 1 } } }))
+    await flushPromises()
+    expect(w.find('[data-test="retry"]').exists()).toBe(false)
+  })
+
+  it('shows why a retry was refused and reloads the live state', async () => {
+    const done = makeCampaign({ status: 'completed', approved_at: '2026-11-07T10:00:00Z', message: goodMessage })
+    fakeFetch({
+      'GET /api/campaigns/7': () => ({ json: { campaign: done } }),
+      'POST /api/campaigns/7/retry-failed': () => ({
+        status: 409,
+        json: { error: 'nothing_to_retry', message: 'Tekrar gönderilecek başarısız mesaj yok.' },
+      }),
+    })
+    const w = mountView()
+    await flushPromises()
+    FakeEventSource.last().open()
+    FakeEventSource.last().emit('progress', failedDone())
+    await flushPromises()
+    await w.get('[data-test="retry-failed"]').trigger('click')
+    await w.get('[data-test="confirm-retry"]').trigger('click')
+    await flushPromises()
+
+    expect(w.get('[role="alert"]').text()).toBe('Tekrar gönderilecek başarısız mesaj yok.')
+    expect(FakeEventSource.instances).toHaveLength(2)
+  })
+
   it('shows "Kampanya 7" and goes back to the list it came from, or opens the list', async () => {
     fakeFetch({ 'GET /api/campaigns/7': () => ({ json: { campaign: makeCampaign({ message: goodMessage }) } }) })
 

@@ -69,6 +69,10 @@ export const api = {
   /** Scheduled campaigns only, before sending starts (409 otherwise). */
   cancel: (id: number) => request<{ campaign: Campaign }>('POST', campaignPath(id) + '/cancel'),
 
+  /** Completed campaigns with failed messages only (409 otherwise). */
+  retryFailed: (id: number) =>
+    request<{ campaign: Campaign; requeued: number }>('POST', campaignPath(id) + '/retry-failed'),
+
   generationEventsUrl: (genId: string) => `/api/content/generations/${encodeURIComponent(genId)}/events`,
   campaignEventsUrl: (id: number) => campaignPath(id) + '/events',
 }
