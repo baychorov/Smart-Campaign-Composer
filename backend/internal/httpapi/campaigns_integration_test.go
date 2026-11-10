@@ -628,3 +628,60 @@ func sameInstant(got any, want string) bool {
 	b, err2 := time.Parse(time.RFC3339, want)
 	return err1 == nil && err2 == nil && a.Equal(b)
 }
+
+func TestRetryFailedRoute(t *testing.T) {
+	fake := llm.NewFake(llm.Text(caseRuleJSON))
+	env := newCampaignEnv(t, fake)
+	api := env.api
+
+	status, out := api.do("POST", "/api/campaigns", `{"brief":"İstanbul'da sepeti terk edenler"}`)
+	if status != http.StatusCreated {
+		t.Fatalf("create: %d %v", status, out)
+	}
+	path := idPath(campaignOf(t, out))
+	if status, out = api.do("PUT", path+"/content", messageText(t, goodMessage)); status != http.StatusOK {
+		t.Fatalf("save content: %d %v", status, out)
+	}
+	if status, out = api.do("POST", path+"/approve", `{"channels":{"sms":true,"email":true}}`); status != http.StatusOK {
+		t.Fatalf("approve: %d %v", status, out)
+	}
+	// Not completed yet.
+	if status, out = api.do("POST", path+"/retry-failed", ""); status != http.StatusConflict || out["error"] != "not_completed" {
+		t.Fatalf("retry while approved: %d %v", status, out)
+	}
+
+	// Finish by hand: two rows failed, the rest sent.
+	ctx := t.Context()
+	if _, err := env.pool.Exec(ctx, `UPDATE deliveries SET status = 'sent', sent_at = $1`, seedNow); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.pool.Exec(ctx, `UPDATE deliveries SET status = 'failed', attempts = 5, last_error = 'http 500, gave up after 5 attempts'
+WHERE id IN (SELECT id FROM deliveries ORDER BY id LIMIT 2)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.pool.Exec(ctx, `UPDATE campaigns SET status = 'completed'`); err != nil {
+		t.Fatal(err)
+	}
+
+	status, out = api.do("POST", path+"/retry-failed", "")
+	if status != http.StatusOK || campaignOf(t, out)["status"] != "sending" || fmtAny(out["requeued"]) != "2" {
+		t.Fatalf("retry: %d %v", status, out)
+	}
+	// Sending again: a second click gets 409.
+	if status, out = api.do("POST", path+"/retry-failed", ""); status != http.StatusConflict || out["error"] != "not_completed" {
+		t.Fatalf("retry twice: %d %v", status, out)
+	}
+	// Completed with nothing failed.
+	if _, err := env.pool.Exec(ctx, `UPDATE deliveries SET status = 'sent', sent_at = $1 WHERE status = 'pending'`, seedNow); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.pool.Exec(ctx, `UPDATE campaigns SET status = 'completed'`); err != nil {
+		t.Fatal(err)
+	}
+	if status, out = api.do("POST", path+"/retry-failed", ""); status != http.StatusConflict || out["error"] != "nothing_to_retry" {
+		t.Fatalf("retry without failed rows: %d %v", status, out)
+	}
+	if status, _ = api.do("POST", "/api/campaigns/999999/retry-failed", ""); status != http.StatusNotFound {
+		t.Fatalf("retry missing: %d", status)
+	}
+}

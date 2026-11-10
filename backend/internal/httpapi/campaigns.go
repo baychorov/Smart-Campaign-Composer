@@ -124,6 +124,10 @@ func (s *Server) writeCampaignError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, "not_scheduled", "Yalnızca zamanlanmış ve henüz gönderilmeye başlanmamış bir kampanya iptal edilebilir.")
 	case errors.Is(err, campaign.ErrSendingStarted):
 		writeError(w, http.StatusConflict, "sending_started", "Gönderim bu sırada başladı; kampanya iptal edilemedi.")
+	case errors.Is(err, campaign.ErrNotCompleted):
+		writeError(w, http.StatusConflict, "not_completed", "Başarısız mesajlar ancak gönderim tamamlandıktan sonra tekrar gönderilebilir.")
+	case errors.Is(err, campaign.ErrNothingToRetry):
+		writeError(w, http.StatusConflict, "nothing_to_retry", "Tekrar gönderilecek başarısız mesaj yok.")
 	case errors.Is(err, campaign.ErrNotApprovable):
 		writeError(w, http.StatusUnprocessableEntity, "rule_not_approvable", "Kural bir kitle tanımlamıyor.")
 	case errors.As(err, &ruleErr):
@@ -365,4 +369,20 @@ func (s *Server) cancelCampaign(w http.ResponseWriter, r *http.Request) {
 	}
 	s.cfg.Log.Info("scheduled campaign cancelled", "campaign_id", id)
 	s.writeCampaign(w, r, http.StatusOK, c, nil)
+}
+
+// retryFailed: POST /api/campaigns/{id}/retry-failed. Requeues the failed
+// messages of a completed campaign (409 if it is not completed or has none).
+func (s *Server) retryFailed(w http.ResponseWriter, r *http.Request) {
+	id, ok := campaignID(w, r)
+	if !ok {
+		return
+	}
+	c, n, err := s.cfg.Campaigns.RetryFailed(r.Context(), id)
+	if err != nil {
+		s.writeCampaignError(w, err)
+		return
+	}
+	s.cfg.Log.Info("failed deliveries requeued", "campaign_id", id, "deliveries", n)
+	s.writeCampaign(w, r, http.StatusOK, c, map[string]any{"requeued": n})
 }

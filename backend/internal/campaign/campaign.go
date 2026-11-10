@@ -42,6 +42,8 @@ var transitions = map[Status][]Status{
 	StatusApproved:  {StatusSending},
 	StatusScheduled: {StatusSending, StatusCancelled},
 	StatusSending:   {StatusCompleted},
+	// Manual retry of failed messages (RetryFailed).
+	StatusCompleted: {StatusSending},
 }
 
 // CanTransition reports whether the state machine allows from → to.
@@ -80,6 +82,11 @@ var (
 	// ErrSendingStarted: the worker took the campaign's first messages
 	// while the cancellation was running; sending wins.
 	ErrSendingStarted = errors.New("campaign sending has started")
+	// ErrNotCompleted: failed messages can be retried only after the
+	// campaign has completed.
+	ErrNotCompleted = errors.New("campaign is not completed")
+	// ErrNothingToRetry: the completed campaign has no failed messages.
+	ErrNothingToRetry = errors.New("campaign has no failed messages")
 )
 
 // Issue is one reason a request was refused. Message is Turkish: it is

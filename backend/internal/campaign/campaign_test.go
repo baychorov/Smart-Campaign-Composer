@@ -18,9 +18,10 @@ func TestCanTransition(t *testing.T) {
 		{StatusScheduled, StatusSending}:   true,
 		{StatusScheduled, StatusCancelled}: true,
 		{StatusSending, StatusCompleted}:   true,
+		{StatusCompleted, StatusSending}:   true, // manual retry of failed messages
 	}
 	// Every pair, so a new edge cannot be added by accident: no way back
-	// to draft, no skipping approval, nothing after completed.
+	// to draft, no skipping approval, nothing after cancelled.
 	for _, from := range all {
 		for _, to := range all {
 			if got := CanTransition(from, to); got != allowed[[2]Status{from, to}] {

@@ -50,6 +50,12 @@ RETURNING d.id, d.campaign_id, d.channel, d.attempts, d.throttles,
 // approved (or scheduled) to sending in the same transaction. A scheduled
 // campaign's rows are not due before its send time (next_attempt_at), so
 // the claim query needs no other change for scheduling.
+//
+// A completed campaign moves back to sending too. Its rows are pending
+// again only after a manual retry (campaign.RetryFailed), which reopens
+// the campaign itself; but a FinishCampaigns statement that started before
+// that retry committed can still read the old, all-final rows and mark the
+// campaign completed again. Claiming the requeued rows repairs that.
 func (s *PGStore) Claim(ctx context.Context, ch Channel, limit int, now, leaseUntil time.Time) ([]Job, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -82,7 +88,7 @@ func (s *PGStore) Claim(ctx context.Context, ch Channel, limit int, now, leaseUn
 	}
 	if _, err := tx.Exec(ctx, `
 UPDATE campaigns SET status = 'sending', updated_at = $2
-WHERE id = ANY($1) AND status IN ('approved', 'scheduled')`, ids, now); err != nil {
+WHERE id = ANY($1) AND status IN ('approved', 'scheduled', 'completed')`, ids, now); err != nil {
 		return nil, fmt.Errorf("mark campaigns sending: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
