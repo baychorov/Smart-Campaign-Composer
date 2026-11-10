@@ -63,6 +63,28 @@ const confirmingCancel = ref(false)
 const cancelling = ref(false)
 const cancelError = ref<string | null>(null)
 
+// Editing a scheduled campaign (PLAN step 15f): it goes back to draft and
+// the page shows the workspace; it is sent only after a new approval. Same
+// two steps and the same "sending wins" rule as cancelling.
+const confirmingEdit = ref(false)
+
+async function reopen() {
+  cancelling.value = true
+  cancelError.value = null
+  try {
+    const out = await api.reopen(props.campaign.id)
+    confirmingEdit.value = false
+    emit('update', out.campaign)
+  } catch (e) {
+    const err = toApiError(e)
+    cancelError.value = err.message
+    confirmingEdit.value = false
+    if (err.code === 'sending_started' || err.code === 'not_scheduled') emit('reload')
+  } finally {
+    cancelling.value = false
+  }
+}
+
 async function cancelSchedule() {
   cancelling.value = true
   cancelError.value = null
@@ -171,9 +193,15 @@ const approvedAt = computed(() => {
           <span>
             Gönderim <b>{{ campaign.send_at ? formatTurkey(campaign.send_at) : '—' }}</b> tarihinde başlayacak.
           </span>
-          <button v-if="!confirmingCancel" type="button" class="btn btn-sm" data-test="cancel" @click="confirmingCancel = true">
-            Zamanlamayı iptal et
-          </button>
+          <span v-if="!confirmingCancel && !confirmingEdit" class="confirm">
+            <button type="button" class="btn btn-sm" data-test="edit" @click="confirmingEdit = true">Düzenle</button>
+            <button type="button" class="btn btn-sm" data-test="cancel" @click="confirmingCancel = true">Zamanlamayı iptal et</button>
+          </span>
+          <span v-else-if="confirmingEdit" class="confirm">
+            Zamanlama kaldırılacak; düzenledikten sonra yeniden onaylaman gerekir.
+            <button type="button" class="btn btn-sm btn-primary" :disabled="cancelling" data-test="confirm-edit" @click="reopen">Düzenle</button>
+            <button type="button" class="btn btn-sm" :disabled="cancelling" @click="confirmingEdit = false">Vazgeç</button>
+          </span>
           <span v-else class="confirm">
             Kampanya iptal edilecek ve hiç mesaj gönderilmeyecek.
             <button type="button" class="btn btn-sm btn-danger" :disabled="cancelling" data-test="confirm-cancel" @click="cancelSchedule">İptal et</button>

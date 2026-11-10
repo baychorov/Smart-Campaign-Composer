@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api/client'
-import type { Issue } from '../api/types'
+import type { Campaign, Issue } from '../api/types'
 import ApprovalBar from '../components/ApprovalBar.vue'
 import AudiencePanel from '../components/AudiencePanel.vue'
 import ContentPanel from '../components/ContentPanel.vue'
@@ -46,14 +46,38 @@ const approveError = ref<string | null>(null)
 
 const isDraft = computed(() => campaign.value?.status === 'draft')
 
+// The approval choices start from the draft: its send time (the brief's
+// suggestion, or the time of a scheduled campaign being edited) and its
+// channels (both for a new draft, the earlier choice for an edited one).
+function startDraft(c: Campaign) {
+  editor.init(c)
+  sendAt.value = c.send_at ? toTurkeyInput(c.send_at) : ''
+  channels.value = { ...c.channels }
+  partialAck.value = false
+  approveIssues.value = []
+  approveError.value = null
+}
+
+// A scheduled campaign turned back into a draft ("Düzenle" on the
+// dashboard, or in another tab and seen on a reload): the same page shows
+// the workspace again, started from the campaign as it is now.
+watch(
+  () => campaign.value?.status,
+  (now, before) => {
+    if (before && before !== 'draft' && now === 'draft' && campaign.value) {
+      startDraft(campaign.value)
+      window.scrollTo({ top: 0 })
+    }
+  },
+)
+
 onMounted(async () => {
   const passed = (history.state as { warnings?: Issue[] } | null)?.warnings
   if (Array.isArray(passed)) warnings.value = passed
   await load()
   const c = campaign.value
   if (!c || c.status !== 'draft') return
-  editor.init(c)
-  if (c.send_at) sendAt.value = toTurkeyInput(c.send_at)
+  startDraft(c)
   // Decision (PLAN step 11): an "ok" rule starts generation by itself; a
   // partial rule waits until the marketer has read what was left out.
   const empty = !Object.values(c.message).some((v) => v.trim() !== '')

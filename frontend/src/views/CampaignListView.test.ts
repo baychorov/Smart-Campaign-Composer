@@ -55,7 +55,7 @@ const calls = (c: { method: string; path: string }[]) => c.map((x) => `${x.metho
 
 describe('CampaignListView', () => {
   it('shows collapsed rows without the brief', async () => {
-    fakeFetch({ 'GET /api/campaigns?filter=all': () => page([sentItem, draftItem]) })
+    fakeFetch({ 'GET /api/campaigns': () => page([sentItem, draftItem]) })
     const w = await mountView()
     await flushPromises()
 
@@ -72,7 +72,7 @@ describe('CampaignListView', () => {
 
   it('marks a draft whose brief gave no approvable audience as "Geçersiz"', async () => {
     const invalid: CampaignListItem = { ...draftItem, id: 6, approvable: false }
-    fakeFetch({ 'GET /api/campaigns?filter=all': () => page([draftItem, invalid]) })
+    fakeFetch({ 'GET /api/campaigns': () => page([draftItem, invalid]) })
     const w = await mountView()
     await flushPromises()
     const status = w.get('[data-test="row-6"] [data-test="status"]')
@@ -83,7 +83,7 @@ describe('CampaignListView', () => {
 
   it('shows the send time of a scheduled campaign in its row', async () => {
     const item: CampaignListItem = { ...sentItem, id: 9, status: 'scheduled', send_at: '2026-11-10T07:00:00Z', progress: {} }
-    fakeFetch({ 'GET /api/campaigns?filter=all': () => page([item]) })
+    fakeFetch({ 'GET /api/campaigns': () => page([item]) })
     const w = await mountView()
     await flushPromises()
     expect(w.get('[data-test="row-9"] [data-test="status"]').text()).toBe('Zamanlandı')
@@ -91,9 +91,34 @@ describe('CampaignListView', () => {
     expect(w.get('.cols').text()).toContain('Gönderim zamanı')
   })
 
+  it('says when each campaign was or will be sent', async () => {
+    const at = '2026-11-12T07:00:00Z' // 10:00 in Turkey
+    const rows: CampaignListItem[] = [
+      { ...sentItem, id: 1, status: 'scheduled', send_at: at, progress: {} },
+      { ...sentItem, id: 2, status: 'completed', send_at: at }, // scheduled, then sent
+      { ...sentItem, id: 3, status: 'sending', send_at: null }, // sent at approval
+      { ...sentItem, id: 4, status: 'completed', send_at: null },
+      { ...sentItem, id: 5, status: 'cancelled', send_at: at, progress: {} },
+      { ...draftItem, id: 6, send_at: at }, // the brief's suggestion is not shown here
+      { ...draftItem, id: 7, approvable: false },
+    ]
+    fakeFetch({ 'GET /api/campaigns': () => page(rows) })
+    const w = await mountView()
+    await flushPromises()
+    const cell = (id: number) => w.get(`[data-test="row-${id}"] [data-test="row-send-at"]`)
+
+    expect(cell(1).text()).toContain('10:00')
+    expect(cell(1).find('.scheduled').exists()).toBe(true)
+    expect(cell(2).text()).toContain('10:00')
+    expect(cell(2).find('.sent').exists()).toBe(true)
+    expect(cell(3).text()).toBe('Anında')
+    expect(cell(4).text()).toBe('Anında')
+    for (const id of [5, 6, 7]) expect(cell(id).text()).toBe('—')
+  })
+
   it('gives a cancelled campaign its own badge style, apart from a draft', async () => {
     const item: CampaignListItem = { ...sentItem, id: 5, status: 'cancelled', send_at: '2026-11-10T07:00:00Z', progress: {} }
-    fakeFetch({ 'GET /api/campaigns?filter=all': () => page([item, draftItem]) })
+    fakeFetch({ 'GET /api/campaigns': () => page([item, draftItem]) })
     const w = await mountView()
     await flushPromises()
     const status = w.get('[data-test="row-5"] [data-test="status"]')
@@ -105,7 +130,7 @@ describe('CampaignListView', () => {
   it('opens a row with the campaign details, loaded once', async () => {
     const campaign = makeCampaign({ id: 8, status: 'completed', approved_at: sentItem.approved_at, message: goodMessage, channels: { sms: true, email: false } })
     const c = fakeFetch({
-      'GET /api/campaigns?filter=all': () => page([sentItem]),
+      'GET /api/campaigns': () => page([sentItem]),
       'GET /api/campaigns/8': () => ({ json: { campaign } }),
     })
     const w = await mountView()
@@ -141,7 +166,7 @@ describe('CampaignListView', () => {
 
   it('deletes a draft only after confirmation', async () => {
     const c = fakeFetch({
-      'GET /api/campaigns?filter=all': () => page([sentItem, draftItem]),
+      'GET /api/campaigns': () => page([sentItem, draftItem]),
       'GET /api/campaigns/7': () => ({ json: { campaign: makeCampaign() } }),
       'DELETE /api/campaigns/7': () => ({ json: null }),
     })
@@ -163,7 +188,7 @@ describe('CampaignListView', () => {
   it('keeps a draft that was approved meanwhile and reloads the list', async () => {
     let approved = false
     fakeFetch({
-      'GET /api/campaigns?filter=all': () => page([approved ? { ...draftItem, status: 'approved', approved_at: '2026-11-07T11:00:00Z' } : draftItem]),
+      'GET /api/campaigns': () => page([approved ? { ...draftItem, status: 'approved', approved_at: '2026-11-07T11:00:00Z' } : draftItem]),
       'GET /api/campaigns/7': () => ({ json: { campaign: makeCampaign() } }),
       'DELETE /api/campaigns/7': () => {
         approved = true
@@ -184,9 +209,9 @@ describe('CampaignListView', () => {
 
   it('filters and pages', async () => {
     const c = fakeFetch({
-      'GET /api/campaigns?filter=all': () => page([sentItem], 8),
-      'GET /api/campaigns?filter=all&before=8': () => page([draftItem]),
-      'GET /api/campaigns?filter=draft': () => page([]),
+      'GET /api/campaigns': () => page([sentItem], 8),
+      'GET /api/campaigns?before=8': () => page([draftItem]),
+      'GET /api/campaigns?status=draft': () => page([]),
     })
     const w = await mountView()
     await flushPromises()
@@ -198,24 +223,24 @@ describe('CampaignListView', () => {
 
     await w.get('[data-test="filter-draft"]').trigger('click')
     await flushPromises()
-    expect(calls(c).at(-1)).toBe('GET /api/campaigns?filter=draft')
-    expect(router.currentRoute.value.query).toEqual({ filtre: 'taslak' })
+    expect(calls(c).at(-1)).toBe('GET /api/campaigns?status=draft')
+    expect(router.currentRoute.value.query).toEqual({ durum: 'taslak' })
     expect(w.get('[data-test="empty"]').text()).toContain('Bu filtrede kampanya yok')
   })
 
   it('reads the filter from the URL and follows it when the URL changes', async () => {
     const c = fakeFetch({
-      'GET /api/campaigns?filter=sent': () => page([sentItem]),
-      'GET /api/campaigns?filter=all': () => page([sentItem, draftItem]),
+      'GET /api/campaigns?status=approved%2Csending%2Ccompleted': () => page([sentItem]),
+      'GET /api/campaigns': () => page([sentItem, draftItem]),
     })
-    const w = await mountView('/campaigns?filtre=gonderilen')
+    const w = await mountView('/campaigns?durum=gonderiliyor,tamamlandi')
     await flushPromises()
-    expect(calls(c)).toEqual(['GET /api/campaigns?filter=sent'])
+    expect(calls(c)).toEqual(['GET /api/campaigns?status=approved%2Csending%2Ccompleted'])
     expect(w.get('[data-test="filter-sent"]').attributes('aria-pressed')).toBe('true')
 
     await router.push('/campaigns') // the menu's "Kampanyalar" link
     await flushPromises()
-    expect(calls(c).at(-1)).toBe('GET /api/campaigns?filter=all')
+    expect(calls(c).at(-1)).toBe('GET /api/campaigns')
     expect(w.findAll('li.row')).toHaveLength(2)
   })
 
@@ -226,8 +251,8 @@ describe('CampaignListView', () => {
     const scheduled: CampaignListItem = { ...sentItem, id: 5, status: 'scheduled', send_at: '2026-11-12T07:00:00Z', progress: {} }
     let second = scheduled
     const c = fakeFetch({
-      'GET /api/campaigns?filter=all': () => page([sentItem], 8),
-      'GET /api/campaigns?filter=all&before=8': () => page([second]),
+      'GET /api/campaigns': () => page([sentItem], 8),
+      'GET /api/campaigns?before=8': () => page([second]),
     })
     const shown = ref(true)
     const Host = defineComponent(() => () => h(KeepAlive, null, [shown.value ? h(CampaignListView) : h('div')]))
@@ -245,7 +270,7 @@ describe('CampaignListView', () => {
     shown.value = true // back to the list
     await flushPromises()
 
-    expect(calls(c.slice(before))).toEqual(['GET /api/campaigns?filter=all', 'GET /api/campaigns?filter=all&before=8'])
+    expect(calls(c.slice(before))).toEqual(['GET /api/campaigns', 'GET /api/campaigns?before=8'])
     expect(w.get('[data-test="row-5"] [data-test="status"]').text()).toBe('İptal edildi')
     expect(w.findAll('li.row').map((r) => r.attributes('data-test'))).toEqual(['row-8', 'row-5']) // the same rows, so the scroll position holds
     expect(w.find('[data-test="more"]').exists()).toBe(false)
@@ -255,7 +280,7 @@ describe('CampaignListView', () => {
     const item: CampaignListItem = { ...sentItem, id: 5, status: 'cancelled', send_at: '2026-11-12T07:00:00Z', progress: {} }
     const campaign = makeCampaign({ id: 5, status: 'cancelled', approved_at: sentItem.approved_at, send_at: item.send_at, message: goodMessage })
     fakeFetch({
-      'GET /api/campaigns?filter=all': () => page([item]),
+      'GET /api/campaigns': () => page([item]),
       'GET /api/campaigns/5': () => ({ json: { campaign } }),
     })
     const w = await mountView()
@@ -266,5 +291,75 @@ describe('CampaignListView', () => {
     expect(detail.find('[data-test="delivery"]').exists()).toBe(false)
     expect(detail.text()).not.toContain('Planlanan gönderim')
     expect(detail.text()).toContain('Onaylandı')
+  })
+
+  it('filters with the panel: number, dates and statuses, applied together', async () => {
+    const c = fakeFetch({
+      'GET /api/campaigns': () => page([sentItem, draftItem]),
+      'GET /api/campaigns?status=invalid%2Ccancelled&id=7&from=2026-11-01&to=2026-11-10': () => page([]),
+    })
+    const w = await mountView()
+    await flushPromises()
+    expect(w.find('[data-test="filter-panel"]').exists()).toBe(false)
+    expect(w.find('[data-test="filter-count"]').exists()).toBe(false)
+
+    await w.get('[data-test="open-filters"]').trigger('click')
+    expect(w.find('[data-test="filter-panel"]').exists()).toBe(true)
+    await w.get('[data-test="filter-id"]').setValue('7a') // digits only
+    expect((w.get('[data-test="filter-id"]').element as HTMLInputElement).value).toBe('7')
+    await w.get('[data-test="filter-from"]').setValue('2026-11-01')
+    await w.get('[data-test="filter-to"]').setValue('2026-11-10')
+    await w.get('[data-test="filter-status-gecersiz"]').setValue(true)
+    await w.get('[data-test="filter-status-iptal"]').setValue(true)
+    expect(calls(c)).toHaveLength(1) // nothing applied yet
+    await w.get('[data-test="filter-apply"]').trigger('submit')
+    await flushPromises()
+
+    expect(calls(c).at(-1)).toBe('GET /api/campaigns?status=invalid%2Ccancelled&id=7&from=2026-11-01&to=2026-11-10')
+    expect(router.currentRoute.value.query).toEqual({ durum: 'gecersiz,iptal', no: '7', baslangic: '2026-11-01', bitis: '2026-11-10' })
+    expect(w.find('[data-test="filter-panel"]').exists()).toBe(false)
+    expect(w.get('[data-test="filter-count"]').text()).toBe('3')
+    expect(w.findAll('.filter[aria-pressed="true"]')).toHaveLength(0) // no quick filter matches
+
+    await w.get('[data-test="clear-filters"]').trigger('click')
+    await flushPromises()
+    expect(calls(c).at(-1)).toBe('GET /api/campaigns')
+    expect(router.currentRoute.value.query).toEqual({})
+  })
+
+  it('leaves the list as it was when the panel is closed without applying', async () => {
+    const c = fakeFetch({ 'GET /api/campaigns': () => page([sentItem]) })
+    const w = await mountView()
+    await flushPromises()
+    await w.get('[data-test="open-filters"]').trigger('click')
+    await w.get('[data-test="filter-status-iptal"]').setValue(true)
+    await w.get('[data-test="filter-backdrop"]').trigger('click')
+    expect(w.find('[data-test="filter-panel"]').exists()).toBe(false)
+
+    await w.get('[data-test="open-filters"]').trigger('click') // a new opening starts from the filter in use
+    expect((w.get('[data-test="filter-status-iptal"]').element as HTMLInputElement).checked).toBe(false)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(w.find('[data-test="filter-panel"]').exists()).toBe(false)
+    expect(calls(c)).toHaveLength(1)
+  })
+
+  it('does not apply an end date before the start date', async () => {
+    fakeFetch({ 'GET /api/campaigns': () => page([sentItem]) })
+    const w = await mountView()
+    await flushPromises()
+    await w.get('[data-test="open-filters"]').trigger('click')
+    await w.get('[data-test="filter-from"]').setValue('2026-11-10')
+    await w.get('[data-test="filter-to"]').setValue('2026-11-01')
+    expect(w.get('[data-test="filter-apply"]').attributes('disabled')).toBeDefined()
+    expect(w.get('[data-test="filter-panel"]').text()).toContain('Bitiş tarihi başlangıçtan önce olamaz')
+  })
+
+  it('shows a quick filter as selected when the panel picks exactly its statuses', async () => {
+    fakeFetch({ 'GET /api/campaigns?status=approved%2Csending%2Ccompleted': () => page([sentItem]) })
+    const w = await mountView('/campaigns?durum=tamamlandi,gonderiliyor')
+    await flushPromises()
+    expect(w.get('[data-test="filter-sent"]').attributes('aria-pressed')).toBe('true')
+    expect(w.find('[data-test="filter-count"]').exists()).toBe(false)
   })
 })

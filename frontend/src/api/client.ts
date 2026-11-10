@@ -1,4 +1,4 @@
-import type { Campaign, CampaignPage, CampaignWithWarnings, ContentValidation, Issue, ListFilter, Message, Rule } from './types'
+import type { Campaign, CampaignPage, CampaignWithWarnings, ContentValidation, Issue, Message, Rule } from './types'
 
 /** An error response of the API: {error, message, issues?}. */
 export class ApiError extends Error {
@@ -43,8 +43,11 @@ export const api = {
 
   getCampaign: (id: number) => request<{ campaign: Campaign }>('GET', campaignPath(id)),
 
-  listCampaigns: (filter: ListFilter, before: number | null) =>
-    request<CampaignPage>('GET', `/api/campaigns?filter=${filter}` + (before ? `&before=${before}` : '')),
+  /** query is the filter part (lib/listFilter apiQuery), possibly empty. */
+  listCampaigns: (query: string, before: number | null) => {
+    const q = [query, before ? `before=${before}` : ''].filter(Boolean).join('&')
+    return request<CampaignPage>('GET', '/api/campaigns' + (q ? `?${q}` : ''))
+  },
 
   /** Drafts only; an approved campaign answers 409 not_draft. */
   deleteCampaign: (id: number) => request<null>('DELETE', campaignPath(id)),
@@ -68,6 +71,9 @@ export const api = {
 
   /** Scheduled campaigns only, before sending starts (409 otherwise). */
   cancel: (id: number) => request<{ campaign: Campaign }>('POST', campaignPath(id) + '/cancel'),
+
+  /** A scheduled campaign back to draft for editing (409 once sending has started). */
+  reopen: (id: number) => request<{ campaign: Campaign }>('POST', campaignPath(id) + '/reopen'),
 
   /** Completed campaigns with failed messages only (409 otherwise). */
   retryFailed: (id: number) =>

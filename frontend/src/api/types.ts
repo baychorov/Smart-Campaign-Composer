@@ -141,7 +141,8 @@ export interface Progress {
   at: string
 }
 
-export type ListFilter = 'all' | 'draft' | 'sent'
+/** Statuses the list can be filtered by: a draft is split into "draft" (approvable) and "invalid". */
+export type ListStatus = 'draft' | 'invalid' | 'approved' | 'scheduled' | 'sending' | 'completed' | 'cancelled'
 
 /** A collapsed row of the campaign list; GET /api/campaigns/{id} has the rest. */
 export interface CampaignListItem {

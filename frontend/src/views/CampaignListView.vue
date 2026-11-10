@@ -1,35 +1,32 @@
 <script setup lang="ts">
-import { onActivated, onMounted, ref, watch } from 'vue'
+import { computed, onActivated, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '../api/client'
-import type { Campaign, CampaignListItem, ChannelProgress, ListFilter } from '../api/types'
+import type { Campaign, CampaignListItem, ChannelProgress } from '../api/types'
+import FilterPanel from '../components/FilterPanel.vue'
 import { toApiError } from '../composables/useCampaign'
 import { audienceSentence, displayStatus, formatCount, formatDate, REASON_LABELS } from '../lib/labels'
+import { activeCount, apiQuery, fromQuery, presetOf, PRESETS, sameFilter, toQuery, type ListFilter } from '../lib/listFilter'
 import { formatTurkey } from '../lib/schedule'
 
 // Past campaigns, newest first. A row is collapsed (id, status, date,
 // delivery counts); opening it loads the campaign with GET {id} and shows
 // the brief, audience, channels and message. Drafts can be deleted here.
 
-const FILTERS: { value: ListFilter; label: string }[] = [
-  { value: 'all', label: 'Tümü' },
-  { value: 'draft', label: 'Taslaklar' },
-  { value: 'sent', label: 'Gönderilenler' },
-]
 const CHANNELS = [
   ['sms', 'SMS'],
   ['email', 'Email'],
 ] as const
 
-// The filter is in the URL (?filtre=taslak), so a reload or "back" from a
-// campaign shows the same list. "Tümü" has no query.
-const FILTER_QUERY: Record<ListFilter, string | undefined> = { all: undefined, draft: 'taslak', sent: 'gonderilen' }
+// The filter is in the URL (lib/listFilter.ts), so a reload or "back" from
+// a campaign shows the same list. "Tümü" has no query.
 const route = useRoute()
 const router = useRouter()
-const filterFromQuery = (): ListFilter =>
-  (Object.keys(FILTER_QUERY) as ListFilter[]).find((f) => FILTER_QUERY[f] === route.query.filtre) ?? 'all'
 
-const filter = ref<ListFilter>(filterFromQuery())
+const filter = ref<ListFilter>(fromQuery(route.query))
+const preset = computed(() => presetOf(filter.value))
+const panelOpen = ref(false)
+const filterCount = computed(() => (preset.value ? 0 : activeCount(filter.value)))
 const items = ref<CampaignListItem[]>([])
 const nextBefore = ref<number | null>(null)
 const loading = ref(false)
@@ -53,7 +50,7 @@ async function load(more = false) {
   loading.value = true
   error.value = null
   try {
-    const page = await api.listCampaigns(filter.value, more ? nextBefore.value : null)
+    const page = await api.listCampaigns(apiQuery(filter.value), more ? nextBefore.value : null)
     if (token !== listToken) return
     items.value = more ? [...items.value, ...page.campaigns] : page.campaigns
     nextBefore.value = page.next_before
@@ -76,7 +73,7 @@ async function refresh() {
     let before: number | null = null
     let n = 0
     do {
-      const page = await api.listCampaigns(filter.value, before)
+      const page = await api.listCampaigns(apiQuery(filter.value), before)
       if (token !== listToken) return
       rows = rows.concat(page.campaigns)
       before = page.next_before
@@ -93,20 +90,23 @@ async function refresh() {
 }
 
 function setFilter(f: ListFilter) {
-  if (f === filter.value) return
-  const q = FILTER_QUERY[f]
-  void router.replace({ query: q ? { filtre: q } : {} })
+  panelOpen.value = false
+  if (sameFilter(f, filter.value)) return
+  void router.replace({ query: toQuery(f) })
 }
 
-// The URL drives the filter: a button above, the menu's "Kampanyalar" link
-// (no query) or the browser's back/forward. While a campaign is open the
-// list is kept alive but not on screen; its route is not the list's then.
+const setPreset = (p: (typeof PRESETS)[number]) => setFilter({ statuses: [...p.statuses], id: null, from: '', to: '' })
+
+// The URL drives the filter: a quick filter, the panel, the menu's
+// "Kampanyalar" link (no query) or the browser's back/forward. While a
+// campaign is open the list is kept alive but not on screen; its route is
+// not the list's then.
 watch(
-  () => route.query.filtre,
+  () => JSON.stringify(route.query),
   () => {
     if (route.name !== 'campaigns') return
-    const f = filterFromQuery()
-    if (f === filter.value) return
+    const f = fromQuery(route.query)
+    if (sameFilter(f, filter.value)) return
     filter.value = f
     openId.value = null
     void load()
@@ -161,6 +161,16 @@ async function deleteDraft(id: number) {
   }
 }
 
+// The "Gönderim zamanı" cell. A scheduled campaign keeps its send time
+// after sending; one approved without a time was sent at approval (the
+// "Tarih" column), so it says "Anında". Drafts and cancelled campaigns
+// have none.
+function sendCell(it: CampaignListItem): { kind: 'scheduled' | 'sent' | 'now' | 'none'; text: string } {
+  if (it.status === 'draft' || it.status === 'cancelled') return { kind: 'none', text: '' }
+  if (!it.send_at) return { kind: 'now', text: 'Anında' }
+  return { kind: it.status === 'scheduled' ? 'scheduled' : 'sent', text: formatTurkey(it.send_at) }
+}
+
 const channelsOf = (it: CampaignListItem) =>
   CHANNELS.flatMap(([key, label]) => (it.progress[key] ? [{ key, label, c: it.progress[key] as ChannelProgress }] : []))
 
@@ -189,18 +199,32 @@ onActivated(() => {
   <main class="container page">
     <div class="head">
       <h1>Kampanyalar</h1>
-      <div class="filters" role="group" aria-label="Filtre">
+      <div class="tools">
+        <div class="filters" role="group" aria-label="Filtre">
+          <button
+            v-for="p in PRESETS"
+            :key="p.value"
+            type="button"
+            class="filter"
+            :class="{ active: preset === p.value }"
+            :aria-pressed="preset === p.value"
+            :data-test="`filter-${p.value}`"
+            @click="setPreset(p)"
+          >
+            {{ p.label }}
+          </button>
+        </div>
         <button
-          v-for="f in FILTERS"
-          :key="f.value"
           type="button"
-          class="filter"
-          :class="{ active: filter === f.value }"
-          :aria-pressed="filter === f.value"
-          :data-test="`filter-${f.value}`"
-          @click="setFilter(f.value)"
+          class="filter-btn"
+          :class="{ on: filterCount > 0 }"
+          aria-label="Filtrele"
+          title="Filtrele"
+          data-test="open-filters"
+          @click="panelOpen = true"
         >
-          {{ f.label }}
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11L9.25 8.75v3.5l-2.5 1.25V8.75z" /></svg>
+          <span v-if="filterCount" class="badge num" data-test="filter-count">{{ filterCount }}</span>
         </button>
       </div>
     </div>
@@ -208,8 +232,9 @@ onActivated(() => {
     <p v-if="error" class="note note-bad" role="alert">{{ error }}</p>
 
     <div v-if="!loading && !error && items.length === 0" class="card empty" data-test="empty">
-      <p class="muted">{{ filter === 'all' ? 'Henüz kampanya yok.' : 'Bu filtrede kampanya yok.' }}</p>
-      <RouterLink v-if="filter === 'all'" :to="{ name: 'new' }" class="btn btn-primary">Yeni kampanya</RouterLink>
+      <p class="muted">{{ preset === 'all' ? 'Henüz kampanya yok.' : 'Bu filtrede kampanya yok.' }}</p>
+      <RouterLink v-if="preset === 'all'" :to="{ name: 'new' }" class="btn btn-primary">Yeni kampanya</RouterLink>
+      <button v-else type="button" class="btn" data-test="clear-filters" @click="setPreset(PRESETS[0]!)">Filtreleri temizle</button>
     </div>
 
     <div v-if="items.length" class="cols" aria-hidden="true">
@@ -235,8 +260,9 @@ onActivated(() => {
             displayStatus(it).label
           }}</span>
           <span class="date muted">{{ formatDate(it.approved_at ?? it.created_at) }}</span>
-          <span class="send-cell">
-            <span v-if="it.status === 'scheduled' && it.send_at" class="send-at" data-test="row-send-at">{{ formatTurkey(it.send_at) }}</span>
+          <span class="send-cell" data-test="row-send-at">
+            <span v-if="sendCell(it).kind === 'none'" class="muted">—</span>
+            <span v-else class="send-at" :class="sendCell(it).kind">{{ sendCell(it).text }}</span>
           </span>
           <span class="counts" data-test="counts">
             <span v-for="ch in channelsOf(it)" :key="ch.key" class="count">
@@ -346,6 +372,8 @@ onActivated(() => {
 
     <p v-if="loading" class="muted"><span class="spinner"></span> Yükleniyor…</p>
     <button v-else-if="nextBefore" type="button" class="btn more" data-test="more" @click="load(true)">Daha fazla göster</button>
+
+    <FilterPanel :open="panelOpen" :filter="filter" @close="panelOpen = false" @apply="setFilter" />
   </main>
 </template>
 
@@ -387,6 +415,54 @@ h1 {
   color: var(--ink);
   box-shadow: var(--shadow-card);
   font-weight: 500;
+}
+.tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.filter-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.125rem;
+  height: 2.125rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+}
+.filter-btn:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+.filter-btn.on {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent);
+}
+.filter-btn svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+.badge {
+  position: absolute;
+  top: -0.375rem;
+  right: -0.375rem;
+  min-width: 1.0625rem;
+  height: 1.0625rem;
+  padding: 0 0.25rem;
+  border-radius: 62.4375rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 1.0625rem;
+  text-align: center;
 }
 .list {
   list-style: none;
@@ -459,7 +535,15 @@ h1 {
 }
 .send-at {
   font-size: var(--text-sm);
+}
+.send-at.scheduled {
   color: var(--scheduled);
+}
+.send-at.sent {
+  color: var(--ink-soft);
+}
+.send-at.now {
+  color: var(--muted);
 }
 .st-invalid {
   background: var(--bad-soft);

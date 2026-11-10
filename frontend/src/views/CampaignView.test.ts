@@ -192,6 +192,89 @@ describe('CampaignView', () => {
     expect(w.get('[data-test="status"]').text()).toBe('Gönderiliyor')
   })
 
+  it('edits a scheduled campaign: back to the workspace with its time and channels, then schedules again', async () => {
+    vi.useFakeTimers({ now: new Date('2026-11-01T09:00:00Z'), toFake: ['Date'] })
+    const scheduled = makeCampaign({
+      status: 'scheduled',
+      approved_at: '2026-11-01T08:00:00Z',
+      send_at: '2026-11-02T07:00:00Z',
+      channels: { sms: true, email: false },
+      message: goodMessage,
+    })
+    const reopened: Campaign = { ...scheduled, status: 'draft', approved_at: null, content_validation: validValidation }
+    const calls = fakeFetch({
+      'GET /api/campaigns/7': () => ({ json: { campaign: scheduled } }),
+      'POST /api/campaigns/7/reopen': () => ({ json: { campaign: reopened } }),
+      'POST /api/campaigns/7/approve': () => ({ json: { campaign: scheduled, snapshot: { sms: 111, email: 0 } } }),
+    })
+    const w = mountView()
+    await flushPromises()
+
+    await w.get('[data-test="edit"]').trigger('click')
+    expect(calls.map((c) => c.path)).not.toContain('/api/campaigns/7/reopen') // asks first
+    expect(w.get('[data-test="scheduled"]').text()).toContain('yeniden onaylaman gerekir')
+    await w.get('[data-test="confirm-edit"]').trigger('click')
+    await flushPromises()
+
+    // The workspace, started from the campaign: messages, send time, channels.
+    expect(w.get('[data-test="status"]').text()).toBe('Taslak')
+    expect(w.find('[data-test="scheduled"]').exists()).toBe(false)
+    expect(w.find('textarea').exists()).toBe(true)
+    expect((w.get('textarea').element as HTMLTextAreaElement).value).toBe(goodMessage.sms)
+    expect((w.get('[data-test="send-date"]').element as HTMLInputElement).value).toBe('2026-11-02')
+    expect((w.get('[data-test="send-hour"]').element as HTMLSelectElement).value).toBe('10')
+    expect((w.get('[data-test="ch-sms"]').element as HTMLInputElement).checked).toBe(true)
+    expect((w.get('[data-test="ch-email"]').element as HTMLInputElement).checked).toBe(false)
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(['GET /api/campaigns/7', 'POST /api/campaigns/7/reopen']) // no generation
+
+    await w.get('[data-test="approve"]').trigger('click')
+    await flushPromises()
+    expect(calls.at(-1)!.body).toEqual({ channels: { sms: true, email: false }, partial_ack: false, send_at: '2026-11-02T10:00:00+03:00' })
+    expect(w.get('[data-test="status"]').text()).toBe('Zamanlandı')
+    vi.useRealTimers()
+  })
+
+  it('opens the workspace when a reload finds the campaign was reopened in another tab', async () => {
+    const scheduled = makeCampaign({ status: 'scheduled', approved_at: '2026-11-01T09:00:00Z', send_at: '2026-11-02T07:00:00Z', message: goodMessage })
+    let current = scheduled
+    fakeFetch({
+      'GET /api/campaigns/7': () => ({ json: { campaign: current } }),
+      'POST /api/campaigns/7/cancel': () => {
+        current = { ...scheduled, status: 'draft', approved_at: null, content_validation: validValidation }
+        return { status: 409, json: { error: 'not_scheduled', message: 'Kampanya artık zamanlanmış değil.' } }
+      },
+    })
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-test="cancel"]').trigger('click')
+    await w.get('[data-test="confirm-cancel"]').trigger('click')
+    await flushPromises()
+
+    expect(w.get('[data-test="status"]').text()).toBe('Taslak')
+    expect((w.get('textarea').element as HTMLTextAreaElement).value).toBe(goodMessage.sms)
+    expect((w.get('[data-test="send-date"]').element as HTMLInputElement).value).toBe('2026-11-02')
+  })
+
+  it('shows that sending won when the edit comes too late', async () => {
+    const scheduled = makeCampaign({ status: 'scheduled', approved_at: '2026-11-01T09:00:00Z', send_at: '2026-11-02T07:00:00Z' })
+    let current = scheduled
+    fakeFetch({
+      'GET /api/campaigns/7': () => ({ json: { campaign: current } }),
+      'POST /api/campaigns/7/reopen': () => {
+        current = { ...scheduled, status: 'sending' }
+        return { status: 409, json: { error: 'sending_started', message: 'Gönderim bu sırada başladı; kampanya değiştirilemedi.' } }
+      },
+    })
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-test="edit"]').trigger('click')
+    await w.get('[data-test="confirm-edit"]').trigger('click')
+    await flushPromises()
+
+    expect(w.get('[data-test="status"]').text()).toBe('Gönderiliyor')
+    expect(w.text()).toContain('Gönderim bu sırada başladı')
+  })
+
   const failedDone = () =>
     progress({
       status: 'completed',
