@@ -14,8 +14,6 @@ export function runes(s: string): number {
 /** Fallback for an empty first name, same as the backend (D-CONTENT). */
 export const FIRST_NAME_FALLBACK = 'Değerli Müşterimiz'
 
-export const VARIABLES = ['first_name', 'city'] as const
-
 const VAR_RE = /\{\{\s*([A-Za-z_]+)\s*\}\}/g
 
 export interface TextPart {

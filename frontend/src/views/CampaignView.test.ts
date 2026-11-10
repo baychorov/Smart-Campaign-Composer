@@ -397,6 +397,18 @@ describe('CampaignView', () => {
     expect(w.text()).not.toContain('İsim boş')
   })
 
+  it('fills only the name in the preview: no sample city, an old {{city}} stays as written', async () => {
+    const message = { sms: 'Merhaba {{first_name}}!', email_subject: '{{first_name}}, fırsat', email_body: 'Merhaba {{first_name}},\n\n{{city}} için indirim.' }
+    fakeFetch({ 'GET /api/campaigns/7': () => ({ json: { campaign: makeCampaign({ message, content_validation: validValidation }) } }) })
+    const w = mountView()
+    await flushPromises()
+
+    const mail = w.get('.mail-body').text()
+    expect(mail).toContain('Merhaba Ayşe,')
+    expect(mail).toContain('{{city}} için indirim.')
+    expect(w.text()).not.toContain('İstanbul için')
+  })
+
   it('still turns the counter red when the worst case is over the limit', async () => {
     const stats = { ...validValidation.stats, sms: { runes: 150, worst_case_runes: 165, limit: 160 } }
     const draft = makeCampaign({ message: goodMessage, content_validation: { ...validValidation, valid: false, stats } })

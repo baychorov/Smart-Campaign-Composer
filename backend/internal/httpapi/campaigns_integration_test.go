@@ -200,7 +200,7 @@ func TestCampaignContentValidation(t *testing.T) {
 	}{
 		{"160 Turkish characters", msg(strings.Repeat("ğ", 160)), true, ""},
 		{"161 Turkish characters", msg(strings.Repeat("ğ", 161)), false, content.CodeTooLong},
-		{"fits as written, not with the longest name", msg("{{first_name}}" + strings.Repeat("a", 140)), false, content.CodeTooLong},
+		{"fits as written, not with the longest name", msg("{{first_name}} " + strings.Repeat("a", 139)), false, content.CodeTooLong},
 		{"unknown variable", msg("Merhaba {{ad}}"), false, content.CodeUnknownVariable},
 	}
 	for _, tt := range tests {
@@ -237,7 +237,7 @@ func TestCampaignStoredContentValidation(t *testing.T) {
 	// 130 runes + {{first_name}}: too long with the 31-rune name of the
 	// İstanbul audience, fits the case audience (D-CONTENT example).
 	m := goodMessage
-	m.SMS = "{{first_name}}" + strings.Repeat("a", 130)
+	m.SMS = "{{first_name}} " + strings.Repeat("a", 129)
 	api.do("PUT", path+"/content", messageText(t, m))
 
 	validation := func(out map[string]any) map[string]any {

@@ -122,7 +122,7 @@ func TestGenerateContentStreamsWhatIsValidated(t *testing.T) {
 func TestGenerateContentRepair(t *testing.T) {
 	tooLong := goodMessage
 	// Fits as written (146 runes) but not with the 31-rune name (163).
-	tooLong.SMS = "{{first_name}}" + strings.Repeat("a", 132)
+	tooLong.SMS = "{{first_name}} " + strings.Repeat("a", 131)
 	fake := NewFake(Text(messageJSON(t, tooLong)), Text(messageJSON(t, goodMessage)))
 	rec := newRecorder()
 
@@ -145,6 +145,46 @@ func TestGenerateContentRepair(t *testing.T) {
 	}
 	if rec.shown[content.FieldSMS] != goodMessage.SMS {
 		t.Errorf("after reset the UI shows %q", rec.shown[content.FieldSMS])
+	}
+}
+
+// The email of the real-API run that found the problem ("{{city}}'dan"),
+// and a suffix on the name: the validator rejects both and the repair
+// prompt says why. The system prompt states both rules (PLAN step 15f).
+func TestGenerateContentRepairsVariables(t *testing.T) {
+	for _, rule := range []string{"The only variable is {{first_name}}", "Never write {{city}}", "never attach a suffix", "Do not mention where the recipient lives"} {
+		if !strings.Contains(contentSystemPrompt, rule) {
+			t.Fatalf("content system prompt lacks %q", rule)
+		}
+	}
+	tests := []struct {
+		name, body string
+		want       []string // in the repair prompt
+	}{
+		{"withdrawn city", "Merhaba {{first_name}},\n\n{{city}}'dan bizimle alışveriş yapan herkes gibi sen de favorilerine kavuşabilirsin.",
+			[]string{"[" + content.CodeUnknownVariable + "]", "bilinmeyen değişken {{city}}; kullanılabilenler: {{first_name}}"}},
+		{"suffix on the name", "Merhaba,\n\n{{first_name}}'in sepeti seni bekliyor.",
+			[]string{"[" + content.CodeVariableSuffix + "]", "Değişkene ek getirilemez: {{first_name}}'in"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bad := goodMessage
+			bad.EmailBody = tt.body
+			fake := NewFake(Text(messageJSON(t, bad)), Text(messageJSON(t, goodMessage)))
+			res, err := GenerateContent(context.Background(), fake, contentIn, longest, newRecorder().emit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Repairs != 1 || res.Validation.Message != goodMessage {
+				t.Fatalf("repairs %d, message %+v", res.Repairs, res.Validation.Message)
+			}
+			repair := fake.Calls()[1].Prompt
+			for _, s := range tt.want {
+				if !strings.Contains(repair, s) {
+					t.Errorf("repair prompt lacks %q", s)
+				}
+			}
+		})
 	}
 }
 
@@ -255,10 +295,13 @@ func TestContentPromptHasNoPersonalData(t *testing.T) {
 	if strings.Contains(req.Prompt, longestName) || strings.Contains(req.Prompt, "Afyonkarahisar") {
 		t.Fatal("prompt contains a customer value")
 	}
-	for _, s := range []string{"{{first_name}}: 31", "{{city}}: 14", "<brief>", "<audience>", "Samimi bir dil", "İstanbul'da yaşayan"} {
+	for _, s := range []string{"{{first_name}}: 31", "<brief>", "<audience>", "Samimi bir dil", "İstanbul'da yaşayan"} {
 		if !strings.Contains(req.Prompt, s) {
 			t.Errorf("prompt lacks %q:\n%s", s, req.Prompt)
 		}
+	}
+	if strings.Contains(req.Prompt, "{{city}}:") {
+		t.Error("the length budget offers the withdrawn {{city}}")
 	}
 	if req.System != contentSystemPrompt || req.Effort != EffortLow || req.Schema["properties"].(map[string]any)["sms"] == nil {
 		t.Errorf("request = %+v", req)

@@ -293,7 +293,7 @@ func TestApproveRefusalsRollBack(t *testing.T) {
 	// Fits with the case audience's names, but not with the longest name
 	// in the seed (31 runes): 31 + 130 = 161.
 	longSMS := goodMessage
-	longSMS.SMS = "{{first_name}}" + strings.Repeat("a", content.MaxSMSRunes-len([]rune(seed.LongestFirstName))+1)
+	longSMS.SMS = "{{first_name}} " + strings.Repeat("a", content.MaxSMSRunes-len([]rune(seed.LongestFirstName)))
 
 	tests := []struct {
 		name string

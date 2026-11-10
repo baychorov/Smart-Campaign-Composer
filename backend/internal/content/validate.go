@@ -2,6 +2,7 @@ package content
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -15,6 +16,7 @@ const (
 	CodeMalformedVariable = "malformed_variable"
 	CodeMultilineSubject  = "multiline_subject"
 	CodeInvalidChar       = "invalid_char"
+	CodeVariableSuffix    = "variable_suffix"
 )
 
 // Issue is one validation error. Message is Turkish: it is shown to the
@@ -77,9 +79,12 @@ func Validate(m Message, longest Values) Result {
 			errorf(CodeInvalidChar, "geçersiz karakter: %U", r)
 		}
 
-		_, terrs := parse(text)
+		parts, terrs := parse(text, Variables())
 		for _, e := range terrs {
 			errorf(e.code, "%s", e.msg)
+		}
+		if bad, ok := suffixedVariable(parts); ok {
+			errorf(CodeVariableSuffix, "Değişkene ek getirilemez: %s", bad)
 		}
 		stats := FieldStats{Runes: utf8.RuneCountInString(text), Limit: limit}
 		if len(terrs) == 0 {
@@ -97,6 +102,42 @@ func Validate(m Message, longest Values) Result {
 		res.Stats[f] = stats
 	}
 	return res
+}
+
+// suffixedVariable finds an allowed variable with a suffix written onto
+// it, such as "{{first_name}}'in", and returns it as written. A Turkish
+// suffix follows the sound of the word (Ayşe'nin, Ahmet'in, "Değerli
+// Müşterimiz'in"), so one fixed suffix is wrong for some recipients. Only a
+// letter or an apostrophe right after "}}" counts: "{{first_name}}," and
+// "{{first_name}} için" are fine. A variable that is not allowed is already
+// an unknown_variable error.
+//
+// This is a validation rule only (approval, generation repair), not part of
+// parse: Render must keep sending messages approved before it existed.
+func suffixedVariable(parts []part) (string, bool) {
+	for i, p := range parts {
+		if !slices.Contains(Variables(), p.name) || i+1 >= len(parts) {
+			continue
+		}
+		next := parts[i+1].text
+		end := strings.IndexFunc(next, func(r rune) bool { return !isSuffixRune(r) })
+		if end < 0 {
+			end = len(next)
+		}
+		if end > 0 {
+			return "{{" + p.name + "}}" + next[:end], true
+		}
+	}
+	return "", false
+}
+
+// isSuffixRune: a letter, or an apostrophe in any of its usual forms.
+func isSuffixRune(r rune) bool {
+	switch r {
+	case '\'', '\u2019', '\u2018', '\u02BC', '`':
+		return true
+	}
+	return unicode.IsLetter(r)
 }
 
 // invalidChar finds control characters other than newline and tab, and

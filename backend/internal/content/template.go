@@ -7,9 +7,13 @@ import (
 	"unicode/utf8"
 )
 
-// Personalisation variables (R-CNT-3). Only these names are allowed; any
-// other {{name}} is an error, so a typo never reaches a customer as raw
-// template text.
+// Personalisation variables (R-CNT-3). A new message may use only
+// Variables(); any other {{name}} is an error, so a typo never reaches a
+// customer as raw template text.
+//
+// {{city}} was withdrawn on 2026-11-10 (user decision, D-CONTENT): the
+// city is a targeting criterion, not message content. Render still fills
+// it, so messages approved before that are still sent.
 const (
 	VarFirstName = "first_name"
 	VarCity      = "city"
@@ -22,8 +26,14 @@ var Fallbacks = map[string]string{
 	VarCity:      "",
 }
 
-// Variables lists the allowed variable names.
+// Variables lists the variables a new message may use (Validate).
 func Variables() []string {
+	return []string{VarFirstName}
+}
+
+// renderable lists the variables Render fills: Variables() and the
+// withdrawn {{city}} of messages approved before.
+func renderable() []string {
 	return []string{VarFirstName, VarCity}
 }
 
@@ -43,8 +53,9 @@ type templateError struct {
 }
 
 // parse splits a template into parts. Variables are {{name}} with optional
-// spaces inside the braces. It reports unknown names and malformed braces.
-func parse(s string) ([]part, []templateError) {
+// spaces inside the braces. It reports names not in allowed and malformed
+// braces.
+func parse(s string, allowed []string) ([]part, []templateError) {
 	var parts []part
 	var errs []templateError
 	for {
@@ -61,9 +72,9 @@ func parse(s string) ([]part, []templateError) {
 		name := strings.TrimSpace(raw)
 		if name == "" || strings.ContainsAny(name, "{} \t\n") {
 			errs = append(errs, templateError{CodeMalformedVariable, fmt.Sprintf("geçersiz değişken: {{%s}}", raw)})
-		} else if !slices.Contains(Variables(), name) {
+		} else if !slices.Contains(allowed, name) {
 			errs = append(errs, templateError{CodeUnknownVariable,
-				fmt.Sprintf("bilinmeyen değişken {{%s}}; kullanılabilenler: {{%s}}", name, strings.Join(Variables(), "}}, {{"))})
+				fmt.Sprintf("bilinmeyen değişken {{%s}}; kullanılabilenler: {{%s}}", name, strings.Join(allowed, "}}, {{"))})
 		}
 		parts = append(parts, part{text: s[:open]}, part{name: name})
 		s = s[open+2+closeIdx+2:]
@@ -78,7 +89,7 @@ func parse(s string) ([]part, []templateError) {
 // fallback. It returns an error for an invalid template; callers normally
 // validate first.
 func Render(tmpl string, v Values) (string, error) {
-	parts, errs := parse(tmpl)
+	parts, errs := parse(tmpl, renderable())
 	if len(errs) > 0 {
 		return "", fmt.Errorf("render template: %s", errs[0].msg)
 	}

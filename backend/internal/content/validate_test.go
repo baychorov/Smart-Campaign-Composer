@@ -109,7 +109,8 @@ func TestValidateVariables(t *testing.T) {
 		code string // "" means valid
 	}{
 		{"Merhaba {{first_name}}", ""},
-		{"Merhaba {{ first_name }}, {{city}}", ""},
+		{"Merhaba {{ first_name }}!", ""},
+		{"Merhaba {{first_name}}, {{city}}", CodeUnknownVariable}, // withdrawn, see TestValidateCityWithdrawn
 		{"Merhaba {{firstname}}", CodeUnknownVariable},
 		{"Merhaba {{last_name}}", CodeUnknownVariable},
 		{"Merhaba {{FIRST_NAME}}", CodeUnknownVariable},
@@ -131,6 +132,94 @@ func TestValidateVariables(t *testing.T) {
 				t.Fatalf("errors %v, want %s", got, tt.code)
 			}
 		})
+	}
+}
+
+// A suffix written onto a variable is wrong for some recipients (Ayşe'nin,
+// Ahmet'in); punctuation, spaces and separate words after it are fine.
+func TestValidateVariableSuffix(t *testing.T) {
+	tests := []struct {
+		text string
+		bad  string // the reported variable as written; "" means valid
+	}{
+		// What the model normally writes must stay valid.
+		{"Merhaba {{first_name}},", ""},
+		{"Merhaba {{first_name}}! Sepetin seni bekliyor.", ""},
+		{"{{first_name}}, sepetin seni bekliyor", ""},
+		{"Merhaba {{first_name}}.\n\nSana özel fırsat", ""},
+		{"{{first_name}} için özel indirim", ""},
+		{"Merhaba {{first_name}}", ""},
+		{"{{first_name}} - %30 indirim", ""},
+		{"Merhaba {{first_name}}:)", ""},
+		{"{{first_name}}\nyeni satır", ""},
+		{"Merhaba {{first_name}} 🎉", ""},
+		{"Kod: SEPET30 ({{first_name}})", ""},
+		// Suffixes, with each apostrophe form and without one.
+		{"{{first_name}}'in sepeti", "{{first_name}}'in"},
+		{"{{first_name}}’in sepeti", "{{first_name}}’in"},
+		{"{{first_name}}ʼe özel", "{{first_name}}ʼe"},
+		{"{{first_name}}cim", "{{first_name}}cim"},
+		{"Sevgili {{ first_name }}'cığım", "{{first_name}}'cığım"},
+		{"Merhaba {{first_name}}, {{first_name}}'e özel", "{{first_name}}'e"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.text, func(t *testing.T) {
+			m := validMsg()
+			m.EmailBody = tt.text
+			res := Validate(m, audience)
+			if tt.bad == "" {
+				if !res.Valid() {
+					t.Fatalf("unexpected errors %v", res.Errors)
+				}
+				return
+			}
+			if len(res.Errors) != 1 || res.Errors[0].Path != FieldEmailBody || res.Errors[0].Code != CodeVariableSuffix ||
+				res.Errors[0].Message != "Değişkene ek getirilemez: "+tt.bad {
+				t.Fatalf("errors %v, want one variable_suffix for %s", res.Errors, tt.bad)
+			}
+		})
+	}
+
+	// Every field is checked.
+	m := Message{SMS: "{{first_name}}'e selam", EmailSubject: "{{first_name}}'in sepeti", EmailBody: "Gövde"}
+	res := Validate(m, audience)
+	if got := codes(res.Errors, FieldSMS); len(got) != 1 || got[0] != CodeVariableSuffix {
+		t.Errorf("sms errors %v", got)
+	}
+	if got := codes(res.Errors, FieldEmailSubject); len(got) != 1 || got[0] != CodeVariableSuffix {
+		t.Errorf("subject errors %v", got)
+	}
+
+	// Sending is not affected: a message approved before this rule still renders.
+	if out, err := Render("{{first_name}}'in sepeti", Values{VarFirstName: "Ayşe"}); err != nil || out != "Ayşe'in sepeti" {
+		t.Errorf("render: %q, %v", out, err)
+	}
+}
+
+// {{city}} was withdrawn (2026-11-10): a new message cannot use it, in any
+// field, with or without a suffix (one error, not two). A message approved
+// before still renders it, so its sending does not fail.
+func TestValidateCityWithdrawn(t *testing.T) {
+	for _, text := range []string{"{{city}} için fırsat", "{{city}}'dan selam", "Merhaba {{first_name}}, {{ city }}"} {
+		for _, f := range Fields {
+			m := validMsg()
+			m.set(f, text)
+			res := Validate(m, audience)
+			if got := codes(res.Errors, f); len(got) != 1 || got[0] != CodeUnknownVariable {
+				t.Errorf("%s %q: errors %v, want [unknown_variable]", f, text, res.Errors)
+			}
+		}
+	}
+	if got := Validate(Message{SMS: "{{city}}", EmailSubject: "a", EmailBody: "b"}, audience).Errors[0].Message; !strings.Contains(got, "kullanılabilenler: {{first_name}}") || strings.Contains(got, "city}}, ") {
+		t.Errorf("message %q", got)
+	}
+
+	out, err := Render("Merhaba {{first_name}}, {{city}}'de indirim!", Values{VarFirstName: "Ayşe", VarCity: "İzmir"})
+	if err != nil || out != "Merhaba Ayşe, İzmir'de indirim!" {
+		t.Fatalf("render of an older message: %q, %v", out, err)
+	}
+	if _, err := Render("{{country}}", Values{}); err == nil {
+		t.Error("render accepted an unknown variable")
 	}
 }
 

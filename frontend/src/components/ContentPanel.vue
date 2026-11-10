@@ -36,9 +36,10 @@ function errorsFor(field: MessageField): Issue[] {
   return validation.value?.errors.filter((e) => e.path === field) ?? []
 }
 
-// The preview fills the variables with one sample customer; the editor
-// above shows the raw {{first_name}}.
-const SAMPLE = { first_name: 'Ayşe', city: 'İstanbul' }
+// The preview fills {{first_name}} with one sample customer; the editor
+// above shows it raw. {{city}} is no longer a variable (D-CONTENT): in an
+// older draft it stays as written, marked like any other variable.
+const SAMPLE = { first_name: 'Ayşe' }
 const preview = (t: string) => splitVariables(renderPreview(t, SAMPLE))
 </script>
 
