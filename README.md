@@ -16,25 +16,36 @@ Pazarlamacı ne istediğini doğal dille yazar, Claude hedef kitleyi ve SMS + em
 
 Yalnızca Docker gerekir.
 
+**1. Repoyu klonla**
+
 ```bash
 git clone git@github.com:baychorov/Smart-Campaign-Composer.git
 cd Smart-Campaign-Composer
+```
+
+**2. Başlat**
+
+İki moddan birini seç. Veritabanı, sahte kullanıcılar ve mock provider iki modda da otomatik kurulur.
+
+Mock LLM ile, API key gerekmez ve ücret oluşmaz:
+
+```bash
 docker compose up --build
 ```
 
-Arayüz: **http://localhost:3000**
-
-Örnek veri ve mock provider otomatik kurulur. Varsayılan **mock LLM**'dir, API key gerekmez.
-
-**Gerçek Claude ile:**
+API key ile, gerçek Claude kullanılır:
 
 ```bash
 cp .env.example .env
-# .env içinde: LLM_PROVIDER=anthropic ve ANTHROPIC_API_KEY=<key>
+# .env içinde LLM_PROVIDER=anthropic ve ANTHROPIC_API_KEY=<key> yaz
 docker compose up --build
 ```
 
-**Durdurma:** `make down` veriyi korur, `docker compose down -v` veriyi siler.
+**3. Arayüzü aç**
+
+> **http://localhost:3000**
+
+Durdurmak için `docker compose down`, veriyi de silmek için `docker compose down -v` kullanılır.
 
 <br>
 
