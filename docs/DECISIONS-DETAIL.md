@@ -1,6 +1,7 @@
 # Kararlar
 
-Bu dosya projedeki önemli tasarım kararlarını ve gerekçelerini tutar (D-5).
+Bu dosya projedeki önemli tasarım kararlarının ve gerekçelerinin ayrıntılı kaydıdır.
+Kısa özet kök dizindeki `DECISIONS.md`'dedir (D-5).
 Gereksinim ID'leri `docs/CASE.md`'ye aittir. Uygulama sırası `docs/PLAN.md`'dedir.
 
 Her kayıt dört başlık içerir: **Karar**, **Gerekçe**, **Alternatifler**, **Sınırlar**.
@@ -528,5 +529,5 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 
 ## D-LANG: Dil kuralı
 
-- **Karar:** Dokümantasyon (DECISIONS.md, PLAN.md, CLAUDE.md, README) Türkçedir. Kod, kod yorumları, değişken isimleri ve commit mesajları İngilizcedir.
+- **Karar:** Dokümantasyon (DECISIONS.md, DECISIONS-DETAIL.md, PLAN.md, CLAUDE.md, README) Türkçedir. Kod, kod yorumları, değişken isimleri ve commit mesajları İngilizcedir.
 - **Gerekçe:** Doküman okuyucusu Türkçe konuşuyor; kod ise uluslararası standartları izler.

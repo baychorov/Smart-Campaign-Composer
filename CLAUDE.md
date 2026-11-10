@@ -6,7 +6,8 @@ Gönderim kuyruk üzerinden mock provider'a yapılır ve canlı izlenir.
 
 Kaynaklar (içeriklerini buraya kopyalama, oradan oku):
 - `docs/CASE.md`: gereksinimler (R-AUD-1, R-SEND-3 gibi ID'ler buradan)
-- `DECISIONS.md`: kararlar ve gerekçeleri
+- `docs/DECISIONS-DETAIL.md`: kararlar ve gerekçeleri (D-xx kimlikleri; koddaki "DECISIONS D-SEG" gibi atıflar bu dosyayı gösterir)
+- `DECISIONS.md`: kullanıcının yazdığı karar özeti (D-5); Claude bu dosyayı kullanıcı istemedikçe değiştirmez
 - `docs/PLAN.md`: uygulama sırası, adım durumları, eval test seti
 
 Teknoloji: Go (backend), Vue 3 + TypeScript + Vite (frontend), PostgreSQL
@@ -18,11 +19,11 @@ Teknoloji: Go (backend), Vue 3 + TypeScript + Vite (frontend), PostgreSQL
 backend/       Go modülü: cmd/{api,worker,mockprovider,seed}, internal/, migrations/, Dockerfile
                Go kuralları: backend/CLAUDE.md
 frontend/      Vue 3 + TypeScript uygulaması (Vite, Vitest); Dockerfile + nginx.conf
-docs/          CASE.md, PLAN.md
+docs/          CASE.md, PLAN.md, DECISIONS-DETAIL.md (ayrıntılı karar kayıtları)
 scripts/       smoke.sh (make smoke)
 eval/reports/  make eval raporları (Markdown + JSON, repoda tutulur)
 ai-sessions/   Claude session export'ları (D-6)
-DECISIONS.md   Karar kayıtları (D-5)
+DECISIONS.md   Karar özeti (D-5, kullanıcı yazar)
 ```
 
 ## Değişmez kurallar
@@ -55,12 +56,12 @@ Bu kurallar hiçbir değişiklikte gevşetilmez:
 | `make eval-dry` | Aynı eval, API yerine ideal yanıtlarla (ücretsiz, rapor dosyası yazmaz) | var |
 | `make lint` | `gofmt`, `go vet`, frontend lint | var |
 
-Test katmanları, build tag'leri ve test ilkesi: `DECISIONS.md` D-TEST.
+Test katmanları, build tag'leri ve test ilkesi: `docs/DECISIONS-DETAIL.md` D-TEST.
 Ücretli komutlar (`test-live`, `eval`) yalnızca kullanıcı onayıyla çalıştırılır.
 
 ## Dil kuralı
 
-- Dokümantasyon (DECISIONS.md, PLAN.md, CLAUDE.md, README) **Türkçe**.
+- Dokümantasyon (DECISIONS.md, DECISIONS-DETAIL.md, PLAN.md, CLAUDE.md, README) **Türkçe**.
 - Kod, kod yorumları, değişken isimleri ve commit mesajları **İngilizce**.
 
 ## Çalışma şekli
@@ -70,7 +71,7 @@ Test katmanları, build tag'leri ve test ilkesi: `DECISIONS.md` D-TEST.
 - Go veya Vue'ya özgü bir kavram ya da yöntem kullandığında kısaca açıkla
   (kullanıcı Python bilgisine sahip; Go ve Vue'da deneyimi az).
 - Bir adım bitince `docs/PLAN.md`'de durumunu güncelle ve kısa bir not düş.
-  Bir karar değişirse `DECISIONS.md`'ye tarihli bir güncelleme notu ekle.
+  Bir karar değişirse `docs/DECISIONS-DETAIL.md`'ye tarihli bir güncelleme notu ekle.
 - Gereksiz soyutlama ekleme. Interface yalnızca değiştirilebilir sınırlarda
   tanımlanır (bkz. DECISIONS D-ARCH).
 - Claude API ayrıntılarında (parametreler, model davranışı) hafızaya güvenme,

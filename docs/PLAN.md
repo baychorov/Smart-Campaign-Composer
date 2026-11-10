@@ -1,6 +1,6 @@
 # Uygulama Planı
 
-Gereksinimler: `docs/CASE.md`. Kararlar ve gerekçeler: `DECISIONS.md`.
+Gereksinimler: `docs/CASE.md`. Kararlar ve gerekçeler: `docs/DECISIONS-DETAIL.md` (özet: kök dizindeki `DECISIONS.md`).
 Süre 7 gün. Önce çekirdek akış sağlam kurulur; bonuslar en sona bırakılır.
 Bir adım bitince durumu güncellenir ve kısa bir not düşülür.
 
@@ -10,7 +10,7 @@ Bir adım bitince durumu güncellenir ve kısa bir not düşülür.
 
 | # | Adım | Kapsam | Gereksinim | Durum |
 |---|---|---|---|---|
-| 0 | Tasarım | Kararlar `DECISIONS.md`'ye yazıldı | D-5 | ✅ |
+| 0 | Tasarım | Kararlar `DECISIONS.md`'ye yazıldı (2026-11-11: `docs/DECISIONS-DETAIL.md` olarak taşındı) | D-5 | ✅ |
 | 1 | Go SDK doğrulaması | Küçük bir deneme programı: Sonnet 5.5 ile `output_config.format`, streaming ve parça birleştirme, `stop_reason` ayrımı. `fallbacks` kapsamdan çıkarıldı (D-MODEL). Bulgular DECISIONS'a (D-LLM-OUT, D-MODEL) eklenir; deneme kodu repoya girmez | R-AI-1 | ✅ |
 | 2 | Repo iskeleti | `go.mod`, `cmd/*` iskeletleri, `docker-compose.yml` (Postgres), `Makefile`, `.env.example` | R-ENV-1, R-ENV-2, D-2 | ✅ |
 | 3 | DB şeması ve seed | Migration'lar (`users`, `user_events`, `campaigns`, `deliveries`); birkaç bin kullanıcılık sabit RNG seed'li veri. Test için bilerek konmuş kohortlar, D-CART kenar durumu dahil | R-SEED-1 | ✅ |

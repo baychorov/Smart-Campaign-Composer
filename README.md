@@ -106,7 +106,7 @@ Zamanlanmış gönderim bu ölçümden sonra eklendi; ilgili iki brief ayrıca y
   ürün/kategori, "en fazla N kez". Bunlar pazarlamacıya açıkça gösterilir.
 - Tüm kitle aynı mesajı alır; email gövdesi düz metindir.
 - SMS sınırı case'teki gibi 160 karakterdir. Gerçekte Türkçe karakterli bir SMS 70
-  karakterde bölünür; gerekçe `DECISIONS.md` D-CONTENT'te.
+  karakterde bölünür; gerekçe `docs/DECISIONS-DETAIL.md` D-CONTENT'te.
 - Zamanlanmış gönderim şu andan sonraki herhangi bir an ile 30 gün arasıdır; gönderim başladıktan sonra durdurulamaz.
 - Mock provider kayıtlarını bellekte tutar; yeniden başlarsa istatistikleri ve idempotency kayıtları
   sıfırlanır. Tekrar gönderimde çift mesajı önleyen son katman bu kayıtlardır (gerçek bir provider
@@ -116,7 +116,8 @@ Zamanlanmış gönderim bu ölçümden sonra eklendi; ilgili iki brief ayrıca y
 
 ## Dokümanlar
 
-- [`DECISIONS.md`](DECISIONS.md): kararlar ve gerekçeleri
+- [`DECISIONS.md`](DECISIONS.md): önemli kararların özeti
+- [`docs/DECISIONS-DETAIL.md`](docs/DECISIONS-DETAIL.md): kararların ayrıntılı kaydı ve gerekçeleri (D-xx kimlikleri)
 - [`docs/PLAN.md`](docs/PLAN.md): uygulama adımları ve eval test seti
 - [`docs/CASE.md`](docs/CASE.md): gereksinimler
 - [`ai-sessions/`](ai-sessions/): Claude Code oturum kayıtları

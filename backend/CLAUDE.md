@@ -69,5 +69,5 @@ migrations/
 - **Zaman:** Testlerde `Sleep`'e dayanılmaz. `testing/synctest` ile sahte saat kullanılır veya `now` fonksiyonu enjekte edilir.
 - **Property testleri:** İzin koşulunun her derlenen SQL'de bulunduğu, grup parantezlerinin doğru olduğu ve kullanıcıdan gelen değerin SQL metnine hiç girmediği test edilir.
 - **Gerçek API:** `make test` gerçek API'ye hiç bağlanmaz. Gerçek API yalnızca `make test-live` ve `make eval` içinde kullanılır.
-- **Build tag'leri:** Postgres veya mock provider gerektiren test dosyaları `//go:build integration`, gerçek API kullananlar `//go:build live` ile başlar. Katmanlar: `DECISIONS.md` D-TEST.
+- **Build tag'leri:** Postgres veya mock provider gerektiren test dosyaları `//go:build integration`, gerçek API kullananlar `//go:build live` ile başlar. Katmanlar: `docs/DECISIONS-DETAIL.md` D-TEST.
 - **Yarış kontrolü:** Testler `-race` ile çalışır.
