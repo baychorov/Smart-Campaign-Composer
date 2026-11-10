@@ -217,6 +217,11 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - Taslakta içerik kaydedilirken ve üretilirken: kuralın SMS veya email ile ulaştığı kullanıcılar. Kanal onayda seçildiği için iki kanal birlikte sayılır. Kitle tanımlamayan bir kuralda yine tüm kullanıcılar kullanılır.
   - Onayda: yazılan snapshot'taki kullanıcılar, yani mesajı gerçekten alacak kişiler.
   - Örnek: Seed'deki 31 karakterlik isim İstanbul'da yaşıyor ama case kitlesinde değil. 130 karakterlik metin + `{{first_name}}` içeren bir SMS, İstanbul kitlesi için 161 karakter olduğundan reddedilir; case kitlesi için onaylanır.
+- **Güncelleme (2026-11-10): SMS sınırı 160 karakter olarak kalır (kullanıcı kararı).**
+  - **Bilinen fark:** Gerçek operatörlerde SMS, standart GSM-7 alfabesindeyse 160 karakter (daha uzunsa 153'lük parçalar), alfabe dışında tek bir karakter (ı, ş, ğ, İ, Ş, Ğ) bile varsa 70 karakterdir (daha uzunsa 67'lik parçalar). 160 karakterlik Türkçe bir SMS gerçekte 3 parçaya bölünür ve 3 SMS olarak ücretlendirilir.
+  - **Neden 70 değil:** 70'e düşürmek değerlendirildi ve elendi. Case sınırı açıkça 160 karakter olarak koyar (R-CNT-1). 70 karakter pazarlama metni için fazla kısıtlayıcıdır ("Merhaba Ayşe, sepetindeki ürünler seni bekliyor! %30 indirim: SEPET30" bu sınıra ancak sığar). Dinamik bir kural (GSM-7 ise 160, değilse 70) pratikte hep 70 demektir: `{{first_name}}` için en kötü durum değeri Türkçe karakter içerir.
+  - **Gerçek sistemde ne yapılırdı:** Sınır karakterle değil parça sayısıyla konur (ör. "en fazla 2 SMS"). Karakter seti, değişkenler en kötü durum değerleriyle doldurularak hesaplanır ve pazarlamacıya onaydan önce tahmini maliyet (kitle × parça sayısı) gösterilir.
+  - Arayüzdeki sayaç sade kalır (`117 / 160`); parça sayısı gösterilmez (kullanıcı kararı, bkz. D-FE adım 15c).
 
 ## D-DEDUP: "Aynı kişiye aynı mesaj iki kez gitmez" (R-SEND-3)
 
@@ -258,13 +263,23 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   | Deneme hakkı bitti | `failed`; son hata dashboard'da görünür |
 - **Gerekçe:** Süreç düşse de retry durumu korunur. Jitter, aynı anda başarısız olan mesajların aynı anda geri dönüp yeni bir yığılma yaratmasını önler.
 - **Alternatifler:** Bellekte `Sleep` ile beklemek: süreç düşünce durum kaybolur. Broker'ın dead-letter queue'su: D-DB kararıyla elendi.
-- **Sınırlar:** Manuel "tekrar gönder" butonu çekirdek kapsamda yok.
+- **Sınırlar:** Manuel "tekrar gönder" butonu çekirdek kapsamda yok (adım 15e'de eklendi, aşağıdaki güncelleme).
 - **Güncelleme (2026-11-07, PLAN adım 9):**
   - **429 sayacı:** `deliveries.throttles` kolonu eklendi (migration 00002). 429 bir deneme hakkı harcamaz; en fazla 20 kez kabul edilir. Retry-After en fazla 5 dk kabul edilir.
   - **Deneme sayımı:** Claim bir deneme sayılır. Böylece çökmeyle yarıda kalan bir deneme de sayıya girer.
   - **Retry edilen ek kodlar:** `408` ve `409` da retry edilir. `409`, provider'ın "bu anahtarla bir istek hâlâ işleniyor" yanıtıdır; genelde çökmeden kalan kendi isteğimizdir ve sonucu sonraki denemede idempotency ile alınır.
   - **Kapanış:** Düzgün kapanışta, alınmış ama henüz gönderilmemiş satırlar deneme hakkı harcamadan hemen `pending`'e döner. Başlamış istekler tamamlanır ve sonuçları yazılır.
   - **`last_error`:** Yalnızca durum kodu veya hata sınıfı (`http 503`, `timeout`) içerir; kişisel veri içermez.
+- **Güncelleme (2026-11-10, PLAN adım 15e):** Manuel "başarısızları tekrar gönder" eklendi (kullanıcı kararı). Varsayılan hata oranlarıyla 5 denemenin hepsinin başarısız olması çok nadirdir; ama mock provider'ın hata oranı yükseltilerek test edildiğinde `failed` mesajlar oluşur ve pazarlamacının bunları yeniden deneyebilmesi gerekir.
+  - **Karar:** `POST /api/campaigns/{id}/retry-failed` yalnızca `completed` bir kampanyada çalışır. Tek transaction'da kampanya `completed → sending` olur ve yalnızca `failed` satırlar `pending`'e döner. Deneme ve 429 sayaçları sıfırlanır, `last_error` silinir. `sent` ve `skipped` satırlara dokunulmaz.
+  - **Aynı satır, aynı anahtar (R-SEND-3):** Satırlar kopyalanmaz, yeniden kuyruğa alınır. Delivery id ve dolayısıyla `Idempotency-Key` değişmez. Provider'ın "kabul edip 500 döndüğü" bir mesaj bizde `failed` görünse de provider'da teslim edilmiştir; tekrar denemede provider saklı başarıyı döner ve ikinci mesaj gitmez. İzin, worker satırı aldığında yeniden kontrol edilir.
+  - **Eşzamanlılık:** Durum geçişi `UPDATE ... WHERE status = 'completed'` ile yapılır; çift tıklamada yalnızca biri satırları kuyruğa alır, diğeri `409 not_completed` alır. Başarısız satır yoksa transaction geri alınır ve `409 nothing_to_retry` döner.
+  - **Worker ile yarış:** Worker'ın `FinishCampaigns` ifadesi, retry commit edilmeden önce başlamışsa satırları eski hâlleriyle (hepsi bitmiş) okuyup kampanyayı yeniden `completed` yapabilir. Buna karşı worker'ın claim'i `completed` bir kampanyayı da `sending`'e alır: kuyruğa alınan satırlar alındığında durum kendiliğinden düzelir. Durum makinesine `completed → sending` kenarı eklendi.
+  - **Alternatifler:** Yeni satırlar açmak (yeni anahtarla): provider'da teslim edilmiş mesajları ikinci kez gönderir. Kalıcı 4xx hatalarını hariç tutmak: mock bunları üretmiyor ve tekrar denemede yine hızlıca `failed` olurlar; ayrım eklenmedi.
+  - **Test:** Postgres'te yalnızca `failed` satırların aynı id ile döndüğü, eşzamanlı 8 istekte tek kazanan, reddedilme durumları ve worker yarışı. Uçtan uca testte tek denemeli bir worker yüksek hata oranlı mock'a karşı çalışır: 567 satır `failed` olur, bunların 298'i provider'da aslında teslim edilmiştir. Tekrar gönderim sonrası teslim sayısı `sent` sayısına eşittir. Satırlar yeni id'lerle kuyruğa alınınca test 298 fazla mesajla kırıldı; claim'deki düzeltme ve `completed` koşulu kaldırılınca da ilgili testler kırıldı.
+  - **Arayüz:** Kampanya tamamlanmış ve başarısız mesaj varsa dashboard'da "N mesaj gönderilemedi" notu ve iki adımlı onaylı "Başarısızları tekrar gönder" düğmesi çıkar. `done` olayıyla kapanmış canlı akış (D-STREAM) yeniden açılır ve yeni gönderim izlenir.
+  - **Elle doğrulama:** Compose ortamı `MOCK_ERROR_RATE=0.6` ve `MOCK_ACCEPT_THEN_FAIL_RATE=0.15` ile başlatıldı (LLM mock). 263 mesajlık kampanyada 34 mesaj `failed` oldu. İlk tekrar gönderimden sonra 2 SMS yine başarısız oldu; bunlardan biri son denemede kabul edilip 500 almıştı (provider'da 124 teslim, DB'de 123 `sent`). İkinci tekrar gönderimde bu satır provider'dan saklı başarıyı aldı: sonuçta SMS 125/125, email 138/138 ve provider teslim sayıları `sent` sayılarına eşit.
+  - **Sınırlar:** Gönderim sürerken tekrar gönderim yapılamaz; kampanya bitince yapılabilir. Tekrar gönderim her seferinde bütün `failed` satırları kapsar, seçim yapılamaz.
 
 ## D-RATE: Kanal başına 100 msg/sn (R-SEND-2)
 

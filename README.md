@@ -98,9 +98,13 @@ flowchart LR
    kadar iptal edilebilir.
 4. **Gönderim ve izleme:** Worker mesajları mock provider'a gönderir; dashboard
    bekleyen, gönderilen, başarısız ve atlanan (izni geri çekilmiş) sayılarını canlı gösterir.
+   Otomatik denemelerden sonra başarısız kalan mesajlar, kampanya bitince dashboard'dan
+   tekrar gönderilebilir; provider'da zaten teslim edilmiş olanlar ikinci kez gitmez.
 5. **Geçmiş kampanyalar:** `Kampanyalar` sayfası bütün kampanyaları en yeniden eskiye listeler
    (Tümü / Taslaklar / Gönderilenler). Satır açılınca brief, kitle, kanallar, gönderim sayıları
    ve mesajlar görünür. Taslaklar buradan silinebilir; onaylanmış kampanyalar silinemez.
+   Onaylanabilir bir kitle çıkmayan taslaklar (ör. veride olmayan bir alana göre "kadın
+   müşteriler") "Geçersiz" olarak işaretlenir.
 
 ### Temel güvenceler
 
@@ -186,6 +190,11 @@ tutarlılık **%100** (25/25). İki çalıştırmada modelin ilk çıktısını 
 reddetti ve tek onarım turunda düzeldi; API hatası olmadı. Rapor:
 [`eval/reports/2026-11-09T1416-claude-sonnet-5-5.md`](eval/reports/2026-11-09T1416-claude-sonnet-5-5.md)
 
+Bu tam eval, zamanlanmış gönderimden (şemaya `send_at` alanının eklenmesi) önce yapıldı.
+Değişiklikten sonra yalnızca zamanla ilgili iki brief (#2 ve #13) üçer kez yeniden ölçüldü:
+6/6 doğru ve tutarlı
+([`2026-11-09T1457`](eval/reports/2026-11-09T1457-cases-2-13-claude-sonnet-5-5.md)).
+
 Bu sonuca giden ara ölçümler de `eval/reports/`'ta duruyor: sayı, tarih ve sıra kriterleri
 eklendikten sonraki ilk tam eval 74/75, şema ve prompt düzeltmelerinden önceki ikinci tam
 eval 72/75 idi. Hatalar ve düzeltmeler `docs/PLAN.md` adım 14b notunda. 20 brief'lik
@@ -208,8 +217,10 @@ eval 72/75 idi. Hatalar ve düzeltmeler `docs/PLAN.md` adım 14b notunda. 20 bri
 - **Takvim tarihleri Türkiye saatiyle** (UTC+3) yorumlanır. Yılı yazılmamış bir tarih
   ("Ekim'de") geleceğe düşmeyen en yakın tarih olarak alınır ve varsayım olarak gösterilir.
 - **Tüm kitle aynı mesajı alır;** gruba özel içerik yok.
-- **SMS limiti karakter sayısıdır** (160). Türkçe karakter içeren gerçek bir SMS'te tek
-  segment 70 karakterdir; bu fark uygulanmaz.
+- **SMS limiti karakter sayısıdır** (160, case'teki kural). Türkçe karakter (ı, ş, ğ)
+  içeren gerçek bir SMS'te tek parça 70 karakterdir; 160 karakterlik Türkçe bir SMS 3 parça
+  olarak ücretlendirilir. Bu fark bilinçli olarak uygulanmadı; gerekçesi ve gerçek bir
+  sistemde ne yapılacağı: `DECISIONS.md` D-CONTENT.
 - **Email gövdesi düz metindir.**
 - **"Son N gün" pencereleri** seed verisinin yüklendiği zamana göre kayar; aynı kural
   zamanla farklı sayılar verebilir. Onaylanan kampanyanın kitlesi onay anında sabitlenir.
@@ -218,8 +229,9 @@ eval 72/75 idi. Hatalar ve düzeltmeler `docs/PLAN.md` adım 14b notunda. 20 bri
   tekrarlayan gönderim ("her pazartesi") yoktur. Kitle onay anında hesaplanır: arada
   kitleye girecek yeni kullanıcılar dahil olmaz, izni geri çekenler ise gönderim anında
   atlanır. Gönderim başladıktan sonra durdurulamaz.
-- **Manuel "tekrar gönder" yok;** deneme hakkı biten mesajlar `failed` kalır ve son hata
-  dashboard'da görünür.
+- **Başarısız mesajları tekrar gönderme** yalnızca kampanya tamamlandıktan sonra ve bütün
+  başarısız mesajlar için birlikte yapılır; gönderim sürerken veya tek tek seçerek yapılamaz.
+- **Yapılmayan bonuslar:** Kullanıcının diline göre içerik yoktur; mesajlar Türkçe üretilir.
 
 ---
 
