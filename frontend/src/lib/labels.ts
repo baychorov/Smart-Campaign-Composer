@@ -36,6 +36,17 @@ export const STATUS_LABELS = {
   cancelled: 'İptal edildi',
 } as const
 
+/**
+ * The status shown for a campaign. A draft whose brief gave no approvable
+ * audience (unsupported or rejected rule) is shown as "Geçersiz": it can
+ * never be approved, only rewritten or deleted. It is not a stored status;
+ * the campaign is still a draft (PLAN step 15d).
+ */
+export function displayStatus(c: { status: keyof typeof STATUS_LABELS; approvable: boolean }): { label: string; invalid: boolean } {
+  const invalid = c.status === 'draft' && !c.approvable
+  return { label: invalid ? 'Geçersiz' : STATUS_LABELS[c.status], invalid }
+}
+
 export function formatCount(n: number): string {
   return n.toLocaleString('tr-TR')
 }

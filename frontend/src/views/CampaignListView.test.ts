@@ -34,9 +34,18 @@ const sentItem: CampaignListItem = {
   created_at: '2026-11-08T09:00:00Z',
   approved_at: '2026-11-08T09:05:00Z',
   send_at: null,
+  approvable: true,
   progress: { sms: { total: 110, pending: 0, sending: 0, sent: 108, failed: 2, skipped: 0 } },
 }
-const draftItem: CampaignListItem = { id: 7, status: 'draft', created_at: '2026-11-07T10:00:00Z', approved_at: null, send_at: null, progress: {} }
+const draftItem: CampaignListItem = {
+  id: 7,
+  status: 'draft',
+  created_at: '2026-11-07T10:00:00Z',
+  approved_at: null,
+  send_at: null,
+  approvable: true,
+  progress: {},
+}
 const page = (campaigns: CampaignListItem[], next: number | null = null): { json: CampaignPage } => ({
   json: { campaigns, next_before: next },
 })
@@ -58,6 +67,17 @@ describe('CampaignListView', () => {
     expect(w.get('[data-test="row-7"] [data-test="status"]').text()).toBe('Taslak')
     expect(w.find('[data-test="detail"]').exists()).toBe(false)
     expect(w.text()).not.toContain('İstanbul')
+  })
+
+  it('marks a draft whose brief gave no approvable audience as "Geçersiz"', async () => {
+    const invalid: CampaignListItem = { ...draftItem, id: 6, approvable: false }
+    fakeFetch({ 'GET /api/campaigns?filter=all': () => page([draftItem, invalid]) })
+    const w = await mountView()
+    await flushPromises()
+    const status = w.get('[data-test="row-6"] [data-test="status"]')
+    expect(status.text()).toBe('Geçersiz')
+    expect(status.classes()).toContain('st-invalid')
+    expect(w.get('[data-test="row-7"] [data-test="status"]').text()).toBe('Taslak')
   })
 
   it('shows the send time of a scheduled campaign in its row', async () => {

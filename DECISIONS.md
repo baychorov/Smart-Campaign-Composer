@@ -397,6 +397,10 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
     - Sınır: Tarih alanının biçimi (`gg.aa.yyyy` ya da `mm/dd/yyyy`) yine tarayıcının diline bağlıdır.
   - **Mesaj alanları (aynı gün, ikinci tur):** Sayaç yalnızca yazılan uzunluğu gösterir (`117 / 160`); "en kötü durum" sayısı ve uzunluk barı pazarlamacı için kaldırıldı. En kötü durum kontrolü backend'de aynen sürer (R-CNT-2): sınırı aşan mesajda sayaç kırmızıdır ve onay, backend'in hata mesajıyla engellenir. Önizleme sabit bir örnek müşteriyle gösterilir; değişken listesi ve doğrulama açıklaması gibi geliştirici metinleri arayüzde yoktur.
 
+- **Güncelleme (2026-11-10, PLAN adım 15d): "Geçersiz" taslaklar.** Onaylanabilir kitle çıkmayan (unsupported veya rejected kurallı) taslak, listede ve kampanya sayfasında "Geçersiz" etiketiyle gösterilir. Bu bir veritabanı durumu değildir: kampanya taslak kalır (silinebilir), etiket kuraldan türetilir (`approvable`). Böyle bir kuralda düzenlenecek koşul olmadığı için değer sonradan değişmez.
+  - Alternatif: `campaigns.status`'a yeni bir `invalid` değeri. Migration, durum makinesi ve taslağa bağlı sorgularda değişiklik gerektirir; yaşam döngüsüne yeni bir adım eklemeden aynı bilgiyi verir.
+  - **Yeniden yazma eski kaydı değiştirir (kullanıcı kararı):** Geçersiz bir taslaktan "Brief'i yeniden yaz" ile açılan form, yeni brief kaydedildikten sonra eski taslağı siler; denemeler listede birikmez. Önce oluşturulur, sonra silinir; silme başarısız olursa yeni kampanya yine açılır. Geçerli taslaklarda bu düğme zaten yoktur.
+
 ## D-COMPOSE: Tek komutla kurulum (D-2)
 
 - **Karar (2026-11-08, PLAN adım 12):** `docker compose up --build` tüm sistemi başlatır. Servisler ve açılış sırası:

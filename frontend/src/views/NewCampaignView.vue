@@ -16,8 +16,12 @@ const EXAMPLES = [
   { label: 'Yeni yıl', brief: 'Tüm kullanıcılarımıza yeni yıl kutlaması gönder.' },
 ]
 
-// "Rewrite the brief" from a campaign page passes the old brief along.
-const passed = (history.state as { brief?: unknown } | null)?.brief
+// "Rewrite the brief" from a campaign page passes the old brief along, and
+// for an invalid draft its id: that draft is deleted once the new brief is
+// stored (it has no message and can never be approved).
+const passedState = history.state as { brief?: unknown; replaces?: unknown } | null
+const passed = passedState?.brief
+const replaces = typeof passedState?.replaces === 'number' ? passedState.replaces : null
 const brief = ref(typeof passed === 'string' ? passed : EXAMPLES[0]!.brief)
 const submitting = ref(false)
 const error = ref<string | null>(null)
@@ -28,6 +32,10 @@ async function submit() {
   error.value = null
   try {
     const out = await api.createCampaign(brief.value)
+    if (replaces !== null) {
+      // Best effort: if it is already gone (another tab), the new draft still opens.
+      await api.deleteCampaign(replaces).catch(() => {})
+    }
     // Warnings come only with this response; pass them to the next page.
     await router.push({
       name: 'campaign',

@@ -31,8 +31,13 @@ const onRemove = (p: CondPath) => emit('updateRule', removeCondition(rule.value,
 const onRemoveValue = (p: CondPath, i: number) => emit('updateRule', removeValue(rule.value, p, i))
 const onSetNumber = (p: CondPath, f: NumberField, n: number) => emit('updateRule', setNumber(rule.value, p, n, f))
 
+// "Brief'i yeniden yaz" opens the form with the old brief. An invalid draft
+// (no approvable audience) is replaced: the form deletes it once the new
+// brief is stored, so retries do not pile up in the list (PLAN step 15d).
 function rewriteBrief() {
-  void router.push({ name: 'new', state: { brief: props.campaign.brief } })
+  const state: { brief: string; replaces?: number } = { brief: props.campaign.brief }
+  if (!props.campaign.approvable) state.replaces = props.campaign.id
+  void router.push({ name: 'new', state })
 }
 </script>
 

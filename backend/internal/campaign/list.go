@@ -2,11 +2,14 @@ package campaign
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/segment"
 )
 
 // Page size limits of List.
@@ -38,6 +41,11 @@ type ListItem struct {
 	// SendAt is the scheduled send time of a scheduled or cancelled
 	// campaign, or the suggestion of a draft.
 	SendAt *time.Time `json:"send_at"`
+	// Approvable tells whether the stored rule can be approved. A draft
+	// whose brief gave no approvable audience (unsupported or rejected)
+	// stays a draft that can only be deleted; the list marks it. The value
+	// cannot change later: such a rule has no conditions to edit.
+	Approvable bool `json:"approvable"`
 	// Channels has the delivery counts of each channel chosen at approval;
 	// empty for a draft.
 	Channels map[string]ChannelProgress `json:"progress"`
@@ -79,7 +87,7 @@ func (s *Service) List(ctx context.Context, filter ListFilter, before int64, lim
 
 	// One extra row tells whether another page exists.
 	rows, err := s.db.Query(ctx, `
-SELECT id, status, created_at, approved_at, scheduled_at
+SELECT id, status, created_at, approved_at, scheduled_at, rule
 FROM campaigns
 WHERE `+where+` AND ($1 = 0 OR id < $1)
 ORDER BY id DESC
@@ -89,8 +97,16 @@ LIMIT $2`, before, limit+1)
 	}
 	items, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (ListItem, error) {
 		it := ListItem{Channels: map[string]ChannelProgress{}}
-		err := row.Scan(&it.ID, &it.Status, &it.CreatedAt, &it.ApprovedAt, &it.SendAt)
-		return it, err
+		var raw []byte
+		if err := row.Scan(&it.ID, &it.Status, &it.CreatedAt, &it.ApprovedAt, &it.SendAt, &raw); err != nil {
+			return it, err
+		}
+		var rule segment.Rule
+		if err := json.Unmarshal(raw, &rule); err != nil {
+			return it, fmt.Errorf("decode stored rule of campaign %d: %w", it.ID, err)
+		}
+		it.Approvable = segment.Validate(rule).Approvable()
+		return it, nil
 	})
 	if err != nil {
 		return ListPage{}, fmt.Errorf("scan campaigns: %w", err)

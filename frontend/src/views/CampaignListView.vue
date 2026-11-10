@@ -4,7 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '../api/client'
 import type { Campaign, CampaignListItem, ChannelProgress, ListFilter } from '../api/types'
 import { toApiError } from '../composables/useCampaign'
-import { audienceSentence, formatCount, formatDate, REASON_LABELS, STATUS_LABELS } from '../lib/labels'
+import { audienceSentence, displayStatus, formatCount, formatDate, REASON_LABELS } from '../lib/labels'
 import { formatTurkey } from '../lib/schedule'
 
 // Past campaigns, newest first. A row is collapsed (id, status, date,
@@ -207,7 +207,9 @@ onActivated(() => {
           @click="toggle(it.id)"
         >
           <span class="id num">{{ it.id }}</span>
-          <span class="status" :class="`st-${it.status}`" data-test="status">{{ STATUS_LABELS[it.status] }}</span>
+          <span class="status" :class="displayStatus(it).invalid ? 'st-invalid' : `st-${it.status}`" data-test="status">{{
+            displayStatus(it).label
+          }}</span>
           <span class="date muted">{{ formatDate(it.approved_at ?? it.created_at) }}</span>
           <span class="send-cell">
             <span v-if="it.status === 'scheduled' && it.send_at" class="send-at" data-test="row-send-at">{{ formatTurkey(it.send_at) }}</span>
@@ -428,12 +430,16 @@ h1 {
   color: var(--info);
 }
 .st-scheduled {
-  background: var(--variable-soft);
-  color: var(--variable);
+  background: var(--scheduled-soft);
+  color: var(--scheduled);
 }
 .send-at {
   font-size: var(--text-sm);
-  color: var(--variable);
+  color: var(--scheduled);
+}
+.st-invalid {
+  background: var(--bad-soft);
+  color: var(--bad);
 }
 .st-completed {
   background: var(--ok-soft);

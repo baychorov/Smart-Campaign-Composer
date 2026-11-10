@@ -150,6 +150,8 @@ export interface CampaignListItem {
   created_at: string
   approved_at: string | null
   send_at: string | null
+  /** False for a draft whose brief gave no approvable audience ("Geçersiz"). */
+  approvable: boolean
   /** Delivery counts of the channels chosen at approval; empty for a draft. */
   progress: Partial<Record<'sms' | 'email', ChannelProgress>>
 }

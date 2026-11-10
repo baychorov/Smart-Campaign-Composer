@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Rule } from '../api/types'
 import { caseRule, groupRule, makeCampaign } from '../test/fixtures'
@@ -96,6 +96,16 @@ describe('AudiencePanel', () => {
     expect(w.text()).toContain('gönderilebilir bir kitle çıkmadı')
     expect(w.text()).toContain('Kampanya isteği değil')
     expect(w.find('.cond').exists()).toBe(false)
+  })
+
+  it('rewrites an invalid draft: the form gets the brief and the draft to replace', async () => {
+    const rejected: Rule = { ...caseRule(), status: 'rejected', common: [], unsupported: [{ text: 'cinsiyet', reason: 'unknown_field', group: null }] }
+    const c = makeCampaign({ id: 12, brief: 'kadın müşteriler', rule: rejected, approvable: false, audience: null })
+    const push = vi.spyOn(router, 'push')
+    const w = mountPanel(c)
+    await w.get('button.btn').trigger('click')
+    expect(push).toHaveBeenCalledWith({ name: 'new', state: { brief: 'kadın müşteriler', replaces: 12 } })
+    push.mockRestore()
   })
 
   it('lists the issues of a refused rule edit', () => {

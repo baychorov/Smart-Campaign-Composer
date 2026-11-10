@@ -10,7 +10,7 @@ import DashboardPanel from '../components/DashboardPanel.vue'
 import { toApiError, useCampaign } from '../composables/useCampaign'
 import { useContentEditor } from '../composables/useContentEditor'
 import { blockingReasons } from '../lib/approval'
-import { STATUS_LABELS } from '../lib/labels'
+import { displayStatus } from '../lib/labels'
 import { fromTurkeyInput, toTurkeyInput } from '../lib/schedule'
 
 // One campaign. A draft shows the workspace (audience | messages + approval
@@ -117,7 +117,9 @@ async function approve() {
         <div class="title-main">
           <div class="eyebrow">
             <span class="campaign-no">Kampanya {{ campaign.id }}</span>
-            <span class="status" :class="campaign.status" data-test="status">{{ STATUS_LABELS[campaign.status] }}</span>
+            <span class="status" :class="displayStatus(campaign).invalid ? 'invalid' : campaign.status" data-test="status">{{
+              displayStatus(campaign).label
+            }}</span>
           </div>
           <p class="brief">“{{ campaign.brief }}”</p>
         </div>
@@ -220,9 +222,14 @@ async function approve() {
 .status.sending,
 .status.approved,
 .status.scheduled {
-  background: var(--info-soft);
+  background: var(--scheduled-soft);
   border-color: transparent;
-  color: var(--info);
+  color: var(--scheduled);
+}
+.status.invalid {
+  background: var(--bad-soft);
+  border-color: transparent;
+  color: var(--bad);
 }
 .status.completed {
   background: var(--ok-soft);

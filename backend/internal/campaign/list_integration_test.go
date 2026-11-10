@@ -4,9 +4,13 @@ package campaign
 
 import (
 	"errors"
+	"maps"
 	"slices"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/baychorov/Smart-Campaign-Composer/backend/internal/llm"
 )
 
 // Layer 2: the campaign list and draft deletion on real Postgres.
@@ -125,6 +129,32 @@ WHERE id IN (SELECT id FROM deliveries WHERE campaign_id = $1 AND channel = 'sms
 			t.Fatalf("err %v, want ErrBadFilter", err)
 		}
 	})
+}
+
+// TestListApprovable: a draft whose brief gave no approvable audience is
+// marked in the list (PLAN step 15d); ok and partial drafts are approvable.
+func TestListApprovable(t *testing.T) {
+	pool := seededPool(t)
+	_, ok := draft(t, pool, istanbulRule, goodMessage)
+	_, partial := draft(t, pool, partialRule, goodMessage)
+	svc := NewService(pool, llm.NewFake(llm.Text(rejectedRule)), func() time.Time { return testNow })
+	rejected, _, err := svc.Create(t.Context(), "not a campaign")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	page, err := svc.List(t.Context(), FilterDraft, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[int64]bool{}
+	for _, it := range page.Items {
+		got[it.ID] = it.Approvable
+	}
+	want := map[int64]bool{ok.ID: true, partial.ID: true, rejected.ID: false}
+	if !maps.Equal(got, want) {
+		t.Fatalf("approvable %v, want %v", got, want)
+	}
 }
 
 func TestDeleteDraft(t *testing.T) {

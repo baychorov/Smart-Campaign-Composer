@@ -290,4 +290,14 @@ describe('CampaignView', () => {
     expect(note).not.toContain('Türkiye saati')
     expect(note).not.toContain('Kitle onay anında')
   })
+
+  it('shows "Geçersiz" for a draft whose brief gave no approvable audience', async () => {
+    const rule = { ...makeCampaign().rule, status: 'rejected' as const, common: [], unsupported: [{ text: 'cinsiyet', reason: 'unknown_field' as const, group: null }] }
+    const invalid = makeCampaign({ rule, approvable: false, audience: null })
+    fakeFetch({ 'GET /api/campaigns/7': () => ({ json: { campaign: invalid } }) })
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-test="status"]').text()).toBe('Geçersiz')
+    expect(w.get('[data-test="status"]').classes()).toContain('invalid')
+  })
 })
