@@ -134,6 +134,8 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - **Sınırlar:** Structured output limitleri dokümantasyondan doğrulandı: istek başına en fazla 24 isteğe bağlı alan ve 16 union (`anyOf` veya tip dizisi) alanı. Şema bu sınırların altında; yeni nullable alanlar eklenirken union sayısı kontrol edilmeli.
   - **Bugünün tarihi:** "Ekim'de", "geçen ay" gibi ifadeler için bugünün tarihi (Türkiye saati) kullanıcı mesajına yazılır. Sistem prompt'u sabit kalır ve önbelleğe alınabilir. Eval, seed'in sabit "bugün"ünü geçer.
 
+- **Güncelleme (2026-11-10, teslim öncesi denetim): Veri etiketlerinin kaçırılması.** Prompt'taki güvenilmeyen metinler (brief, kitle özeti, notlar, onarımda önceki yanıt) etiket içinde gider. Önceden her metinde yalnızca kendi kapanış etiketi ve yalnızca tam `</brief>` yazımı kaçırılıyordu; `</BRIEF>`, `</brief >` ya da notlara yazılmış bir `</brief>` bölümü erken kapatabilirdi. Model etiketleri katı okumadığı için risk düşüktü, ama savunmanın bir parçasıydı. Artık her güvenilmeyen metinde dört etiketin kapanışı da, büyük/küçük harf ve boşluk fark etmeden `</ ad>` biçimine çevrilir (`llm.untag`). Test, saldırı metinlerinin her prompt'ta kodun yazdığından fazla kapanış etiketi bırakmadığını kontrol eder; kaçırma kapatılınca 15 kontrol kırıldı. Brief'in içeriği değişmez; `make eval-dry` 75/75.
+
 ## D-LLM-RETRY: LLM hata ve onarım stratejisi
 
 - **Karar:**

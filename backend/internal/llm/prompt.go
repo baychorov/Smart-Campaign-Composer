@@ -2,6 +2,7 @@ package llm
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -61,8 +62,7 @@ Write assumptions, notes and unsupported[].text in Turkish, short and concrete. 
 // briefTag wraps the brief. A brief containing the closing tag could
 // otherwise end the data section early.
 func briefTag(brief string) string {
-	brief = strings.ReplaceAll(brief, "</brief>", "</ brief>")
-	return "<brief>\n" + brief + "\n</brief>"
+	return "<brief>\n" + untag(brief) + "\n</brief>"
 }
 
 // todayLine tells the model the date, so "Ekim'de" or "geçen ay" become
@@ -84,7 +84,7 @@ func repairPrompt(brief string, today time.Time, previous string, issues []segme
 	b.WriteString(todayLine(today))
 	b.WriteString(briefTag(brief))
 	b.WriteString("\n\nA previous answer for this brief was rejected by the backend validator.\n\n<previous_answer>\n")
-	b.WriteString(previous)
+	b.WriteString(untag(previous))
 	b.WriteString("\n</previous_answer>\n\n<errors>\n")
 	for _, is := range issues {
 		path := is.Path
@@ -136,11 +136,11 @@ type ContentInput struct {
 func contentPrompt(in ContentInput, longest content.Values) string {
 	var b strings.Builder
 	b.WriteString(briefTag(in.Brief))
-	b.WriteString("\n\n<audience>\n" + untag(in.Audience, "audience") + "\n</audience>\n")
+	b.WriteString("\n\n<audience>\n" + untag(in.Audience) + "\n</audience>\n")
 	if len(in.Notes) > 0 {
 		b.WriteString("\n<notes>\n")
 		for _, n := range in.Notes {
-			b.WriteString("- " + untag(n, "notes") + "\n")
+			b.WriteString("- " + untag(n) + "\n")
 		}
 		b.WriteString("</notes>\n")
 	}
@@ -152,16 +152,25 @@ func contentPrompt(in ContentInput, longest content.Values) string {
 	return b.String()
 }
 
-func untag(s, tag string) string {
-	return strings.ReplaceAll(s, "</"+tag+">", "</ "+tag+">")
+// untag breaks the closing tags of the prompt's data sections (brief,
+// audience, notes, previous_answer) in untrusted text, so it cannot end
+// its own or any other section early. The model does not read tags
+// strictly, so case and spaces around them do not matter: "</BRIEF>",
+// "< /notes>" and "</brief >" count too. A tag becomes "</ name>" (a space
+// between the slash and the name), which closes nothing and is not
+// matched again.
+func untag(s string) string {
+	return closingTag.ReplaceAllString(s, "</ $1>")
 }
+
+var closingTag = regexp.MustCompile(`(?i)<\s*/(brief|audience|notes|previous_answer)\s*>`)
 
 // contentRepairPrompt mirrors repairPrompt for messages.
 func contentRepairPrompt(in ContentInput, longest content.Values, previous string, issues []content.Issue) string {
 	var b strings.Builder
 	b.WriteString(contentPrompt(in, longest))
 	b.WriteString("\n\nA previous answer was rejected by the backend validator.\n\n<previous_answer>\n")
-	b.WriteString(previous)
+	b.WriteString(untag(previous))
 	b.WriteString("\n</previous_answer>\n\n<errors>\n")
 	for _, is := range issues {
 		path := is.Path
