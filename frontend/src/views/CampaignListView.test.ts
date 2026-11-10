@@ -85,7 +85,10 @@ describe('CampaignListView', () => {
     const detail = w.get('[data-test="detail"]')
     expect(detail.get('[data-test="brief"]').text()).toBe(campaign.brief)
     expect(detail.text()).toContain('şehri İstanbul olan')
-    expect(detail.text()).toContain(goodMessage.sms)
+    // One block per channel; the e-mail shows its subject over its body.
+    expect(detail.get('[data-test="detail-sms"] .msg-box').text()).toBe(goodMessage.sms)
+    expect(detail.get('[data-test="detail-email"] .mail-subject').text()).toBe(goodMessage.email_subject)
+    expect(detail.get('[data-test="detail-email"] .mail-body').text()).toBe(goodMessage.email_body.trim())
     expect(detail.text()).toContain('Kanallar: SMS')
     // Only drafts can be deleted.
     expect(detail.find('[data-test="delete"]').exists()).toBe(false)

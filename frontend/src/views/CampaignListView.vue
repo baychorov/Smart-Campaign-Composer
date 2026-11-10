@@ -274,19 +274,23 @@ onActivated(() => {
 
             <section>
               <h3>Mesajlar</h3>
-              <template v-if="details[it.id]!.message.sms || details[it.id]!.message.email_subject">
-                <p v-if="details[it.id]!.message.sms" class="msg"><span class="label">SMS</span>{{ details[it.id]!.message.sms }}</p>
-                <p v-if="details[it.id]!.message.email_subject" class="msg">
-                  <span class="label">Email konusu</span>{{ details[it.id]!.message.email_subject }}
-                </p>
-                <p v-if="details[it.id]!.message.email_body" class="msg body">
-                  <span class="label">Email gövdesi</span>{{ details[it.id]!.message.email_body }}
-                </p>
-              </template>
+              <div v-if="details[it.id]!.message.sms || details[it.id]!.message.email_subject" class="msgs">
+                <div v-if="details[it.id]!.message.sms" class="msg-block" data-test="detail-sms">
+                  <div class="msg-label"><i class="swatch" style="background: var(--sms)"></i>SMS</div>
+                  <p class="msg-box">{{ details[it.id]!.message.sms }}</p>
+                </div>
+                <div v-if="details[it.id]!.message.email_subject" class="msg-block" data-test="detail-email">
+                  <div class="msg-label"><i class="swatch" style="background: var(--email)"></i>Email</div>
+                  <div class="msg-box">
+                    <p class="mail-subject">{{ details[it.id]!.message.email_subject }}</p>
+                    <p v-if="details[it.id]!.message.email_body" class="mail-body">{{ details[it.id]!.message.email_body }}</p>
+                  </div>
+                </div>
+              </div>
               <p v-else class="muted small">Henüz mesaj yok.</p>
             </section>
 
-            <p class="muted small">
+            <p class="muted small dates">
               Oluşturuldu: {{ formatDate(details[it.id]!.created_at) }}
               <template v-if="details[it.id]!.approved_at"> · Onaylandı: {{ formatDate(details[it.id]!.approved_at!) }}</template>
               <template v-if="it.status !== 'draft' && details[it.id]!.send_at">
@@ -466,10 +470,16 @@ h1 {
 }
 .detail {
   border-top: 1px solid var(--line);
-  padding: 1rem 1.25rem 1.125rem;
+  padding: 1.25rem 1.25rem 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 0.875rem;
+  gap: 1.125rem;
+}
+/* Thin lines between the sections of an open row. */
+.detail > section + section,
+.detail > .dates {
+  border-top: 1px solid var(--line);
+  padding-top: 1.125rem;
 }
 .detail h3 {
   margin: 0 0 0.375rem;
@@ -515,14 +525,40 @@ tbody th {
   text-align: left;
   font-weight: 500;
 }
-.msg {
-  white-space: pre-wrap;
-  margin-bottom: 0.375rem !important;
+/* Messages: one block per channel, the e-mail as a small mail (subject
+   over body), so the parts read apart at a glance. */
+.msgs {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
-.msg .label {
-  display: block;
+.msg-label {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.375rem;
   font-size: var(--text-xs);
-  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.msg-box {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.detail p.mail-subject {
+  margin: 0 0 0.625rem;
+  padding-bottom: 0.625rem;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+.mail-body {
+  color: var(--ink-soft);
 }
 .actions {
   display: flex;

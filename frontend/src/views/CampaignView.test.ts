@@ -241,4 +241,28 @@ describe('CampaignView', () => {
     await flushPromises()
     expect(w.get('[data-test="counter-sms"]').classes()).toContain('over')
   })
+
+  it('shows the dashboard without developer notes: short labels, spaced approval time, centred "Hata yok"', async () => {
+    const done = makeCampaign({ status: 'completed', approved_at: '2026-11-07T10:00:00Z', message: goodMessage })
+    fakeFetch({ 'GET /api/campaigns/7': () => ({ json: { campaign: done } }) })
+    const w = mountView()
+    await flushPromises()
+    const es = FakeEventSource.last()
+    es.open()
+    es.emit('progress', progress({ status: 'completed', done: true, top_errors: [] }))
+    await flushPromises()
+
+    const text = w.text()
+    expect(text).toContain('gönderim tamamlandı')
+    for (const gone of ['akış kapandı', 'son 10 sn', '(izin)', 'worker 95', '5xx', 'En sık']) expect(text).not.toContain(gone)
+    expect(text).toContain('Kanal başına sınır 100 mesaj/sn')
+    const meta = w.get('[data-test="meta"] .meta-approved')
+    // Date and time as separate parts (the browser's own zone, so only the shape is checked).
+    const [date, time] = meta.findAll('.num').map((n) => n.text())
+    expect(date).toMatch(/^\d{2}\.11\.2026$/)
+    expect(time).toMatch(/^\d{2}:\d{2}$/)
+    const errors = w.get('[data-test="errors-card"]')
+    expect(errors.get('.card-title').text()).toBe('Hatalar')
+    expect(errors.get('.no-errors').text()).toBe('Hata yok.')
+  })
 })

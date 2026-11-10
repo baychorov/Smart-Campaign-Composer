@@ -80,9 +80,12 @@ async function cancelSchedule() {
   }
 }
 
-const approvedAt = computed(() =>
-  props.campaign.approved_at ? new Date(props.campaign.approved_at).toLocaleString('tr-TR') : '—',
-)
+// Date and time are shown as separate parts so they do not run together.
+const approvedAt = computed(() => {
+  if (!props.campaign.approved_at) return null
+  const d = new Date(props.campaign.approved_at)
+  return { date: d.toLocaleDateString('tr-TR'), time: d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) }
+})
 </script>
 
 <template>
@@ -102,7 +105,7 @@ const approvedAt = computed(() =>
           </div>
           <div class="kpi">
             <div class="kpi-value num">{{ (progress?.rate_per_second ?? 0).toFixed(1) }}</div>
-            <div class="kpi-label">mesaj/sn · son 10 sn</div>
+            <div class="kpi-label">mesaj/sn</div>
           </div>
           <div class="kpi">
             <div class="kpi-value num">{{ formatCount(sum('failed')) }}</div>
@@ -110,14 +113,22 @@ const approvedAt = computed(() =>
           </div>
           <div class="kpi">
             <div class="kpi-value num">{{ formatCount(sum('skipped')) }}</div>
-            <div class="kpi-label">atlandı (izin)</div>
+            <div class="kpi-label">atlandı</div>
           </div>
         </div>
-        <p class="meta muted">
-          Onay: {{ approvedAt }} ·
+        <p class="meta muted" data-test="meta">
+          <span class="meta-approved">
+            <span class="meta-label">Onay</span>
+            <template v-if="approvedAt">
+              <span class="num">{{ approvedAt.date }}</span>
+              <span class="num">{{ approvedAt.time }}</span>
+            </template>
+            <template v-else>—</template>
+          </span>
+          <span class="meta-sep" aria-hidden="true"></span>
           <template v-if="stream.state.value === 'open'">canlı, saniyede bir güncelleniyor</template>
           <template v-else-if="stream.state.value === 'connecting'">bağlanıyor…</template>
-          <template v-else-if="progress?.done">{{ status === 'cancelled' ? 'kampanya iptal edildi' : 'gönderim tamamlandı' }}, akış kapandı</template>
+          <template v-else-if="progress?.done">{{ status === 'cancelled' ? 'kampanya iptal edildi' : 'gönderim tamamlandı' }}</template>
           <template v-else-if="stream.state.value === 'error'">
             canlı bağlantı kurulamadı <button type="button" class="btn btn-sm" @click="connect">Tekrar bağlan</button>
           </template>
@@ -175,13 +186,13 @@ const approvedAt = computed(() =>
       </div>
       <div class="card-body">
         <Sparkline :values="rates" :capacity="RATE_HISTORY" />
-        <p class="muted small">Kanal başına sınır 100 mesaj/sn; worker 95 ile gönderir.</p>
+        <p class="muted small">Kanal başına sınır 100 mesaj/sn</p>
       </div>
     </section>
 
-    <section class="card">
+    <section class="card errors-card" data-test="errors-card">
       <div class="card-head">
-        <h2 class="card-title">En sık hatalar</h2>
+        <h2 class="card-title">Hatalar</h2>
         <span class="muted">gönderilmemiş satırlar</span>
       </div>
       <div class="card-body">
@@ -196,8 +207,7 @@ const approvedAt = computed(() =>
             </tr>
           </tbody>
         </table>
-        <p v-else class="muted">Hata yok.</p>
-        <p class="muted small">5xx ve zaman aşımı üstel bekleme ile en fazla 5 kez denenir; 429'da Retry-After beklenir.</p>
+        <p v-else class="muted no-errors">Hata yok.</p>
       </div>
     </section>
   </div>
@@ -296,7 +306,7 @@ const approvedAt = computed(() =>
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.375rem;
+  gap: 0.375rem 0.875rem;
 }
 .btn-sm {
   padding: 0.125rem 0.625rem;
@@ -361,6 +371,37 @@ const approvedAt = computed(() =>
   height: 0.4375rem;
   border-radius: 2px;
   display: inline-block;
+}
+/* The approval time: a label, then date and time with air between them. */
+.meta-approved {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.625rem;
+}
+.meta-label {
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.meta-sep {
+  width: 1px;
+  height: 1em;
+  background: var(--line-strong);
+}
+/* The errors card fills its grid cell; "Hata yok." sits in its middle. */
+.errors-card {
+  display: flex;
+  flex-direction: column;
+}
+.errors-card .card-body {
+  flex: 1;
+}
+.no-errors {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  min-height: 6rem;
 }
 .errors {
   width: 100%;
