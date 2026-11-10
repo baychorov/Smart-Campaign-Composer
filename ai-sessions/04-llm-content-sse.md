@@ -448,7 +448,7 @@
       10   "github.com/anthropics/anthropic-sdk-go/v2"
      … +137 lines (ctrl+o to expand)
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend && go mod tidy
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend && go mod tidy
       >/dev/null 2>&1; go build ./... && go vet ./internal/llm/)
   ⎿  Updated backend/go.sum (+84 -0)
        1 +cloud.google.com/go/auth v0.7.2 h1:uiha352VrCDMXg+yoBtaD0tUF4Kv
@@ -604,7 +604,7 @@
   alanını boş bırakmıştım. Düzeltiyorum, alt test adlarını da sayıyla
   değiştiriyorum.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/llm &&
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend/internal/llm &&
       python3 - <<'EOF'
       import re…)
   ⎿  briefs_test.go
@@ -809,7 +809,7 @@
   Authorization: Bearer ile gönderiyor, gerçek API de adım 1'de bu şekilde
   çalışmıştı. Şimdi testi düzeltiyorum.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/llm &&
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend/internal/llm &&
       python3 - <<'EOF'
       p='anthropic_test.go'…)
   ⎿  ok
@@ -1374,7 +1374,7 @@
       9   "time"
      … +113 lines (ctrl+o to expand)
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer && python3 - <<'EOF'
+● Bash(cd ~/workplace/Smart-Campaign-Composer && python3 - <<'EOF'
       p='Makefile'…)
   ⎿  cd backend && go vet ./... && go vet -tags integration ./... && go vet
       -tags live ./...
@@ -1855,7 +1855,7 @@
 
 ● content paketi tamam. Şimdi llm tarafında içerik üretim akışını yazıyorum.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/llm &&
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend/internal/llm &&
       cat > content_schema.json <<'EOF'
       {…)
   ⎿  ok
@@ -1930,7 +1930,7 @@
   kendisi değil, yalnızca uzunluğu gönderilecek. Böylece müşteri adı LLM'e hiç
   gitmez.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/llm &&
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend/internal/llm &&
       cat >> prompt.go <<'EOF'…)
   ⎿  Updated backend/internal/llm/prompt.go (+76 -0)
        4          "fmt"
@@ -2033,7 +2033,7 @@
 
 ● Now refactor segment.go to share checkBrief and sumUsage.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/llm &&
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend/internal/llm &&
       python3 - <<'EOF'
       p='segment.go'…)
   ⎿  ok
@@ -2130,8 +2130,8 @@
   (campaign paketi).
 
 ● Bash(mkdir -p
-      /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/campaign
-      /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/httpapi &&
+      ~/workplace/Smart-Campaign-Composer/backend/internal/campaign
+      ~/workplace/Smart-Campaign-Composer/backend/internal/httpapi &&
       cat…)
   ⎿  79:type Dataset struct {
      80-     Users  []User
@@ -2447,7 +2447,7 @@
   satırı da temizliyorum.
 
 ● Bash(cd
-      /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/httpapi &&
+      ~/workplace/Smart-Campaign-Composer/backend/internal/httpapi &&
       python3 - <<'EOF'
       p='handlers_test.go'…)
   ⎿        /usr/local/go/src/testing/testing.go:2195 +0x21c
@@ -2525,7 +2525,7 @@
   Ran 1 shell command (ctrl+o to expand)
 
 ● Bash(cd
-      /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/httpapi &&
+      ~/workplace/Smart-Campaign-Composer/backend/internal/httpapi &&
       python3 - <<'EOF'
       p='handlers_test.go'…)  ⎿  ok
      github.com/baychorov/Smart-Campaign-Composer/backend/internal/http
@@ -2603,7 +2603,7 @@
 
   Ran 1 shell command (ctrl+o to expand)
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer && python3 - <<'EOF'
+● Bash(cd ~/workplace/Smart-Campaign-Composer && python3 - <<'EOF'
       def sub(p,a,b):…)
   ⎿   M DECISIONS.md
       M backend/cmd/api/main.go

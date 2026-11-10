@@ -643,7 +643,7 @@
 
   Ran 1 shell command (ctrl+o to expand)
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/frontend && cat >
+● Bash(cd ~/workplace/Smart-Campaign-Composer/frontend && cat >
       src/lib/text.ts <<'EOF'
       // Text helpers for the message editor. The backend is the authority…)
   ⎿  Created frontend/src/lib/text.ts (+46 -0)
@@ -1663,7 +1663,7 @@
 
   Ran 1 shell command (ctrl+o to expand)
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/frontend && cat >
+● Bash(cd ~/workplace/Smart-Campaign-Composer/frontend && cat >
       src/components/DashboardPanel.vue <<'EOF'
       <script setup lang="ts">…)
   ⎿  Created frontend/src/components/DashboardPanel.vue (+326 -0)
@@ -1723,7 +1723,7 @@
 
 ● Bash(python3 - <<'EOF'
       p='src/components/AudiencePanel.vue'…)
-  ⎿  /home/baykan/workplace/Smart-Campaign-Composer/frontend/src/components
+  ⎿  ~/workplace/Smart-Campaign-Composer/frontend/src/components
      /ConditionRow.vue
        97:6  warning  Expected 1 line break after opening tag (`<button>`),
      … +18 lines (ctrl+o to expand)
@@ -1982,7 +1982,7 @@
      … 29 more lines (ctrl+o to expand)
 ● Bash(cat > src/lib/text.test.ts <<'EOF'
       import { describe, expect, it } from 'vitest'…)
-  ⎿   RUN  v5.1.0 /home/baykan/workplace/Smart-Campaign-Composer/frontend
+  ⎿   RUN  v5.1.0 ~/workplace/Smart-Campaign-Composer/frontend
      … +5 lines (ctrl+o to expand)
   ⎿  Created frontend/src/lib/text.test.ts (+34 -0)
        1 +import { describe, expect, it } from 'vitest'                  
@@ -2189,7 +2189,7 @@
 
 ● Bash(cat > src/composables/useEventStream.test.ts <<'EOF'
       import { afterEach, describe, expect, it, vi } from 'vitest'…)
-  ⎿   RUN  v5.1.0 /home/baykan/workplace/Smart-Campaign-Composer/frontend
+  ⎿   RUN  v5.1.0 ~/workplace/Smart-Campaign-Composer/frontend
      … +5 lines (ctrl+o to expand)
   ⎿  Created frontend/src/composables/useEventStream.test.ts (+68 -0)
        1 +import { afterEach, describe, expect, it, vi } from 'vitest'   
@@ -2437,7 +2437,7 @@
 ● Bash(python3 - <<'EOF'
       p='src/lib/rule.ts'…)
   ⎿  4
-      RUN  v5.1.0 /home/baykan/workplace/Smart-Campaign-Composer/frontend
+      RUN  v5.1.0 ~/workplace/Smart-Campaign-Composer/frontend
      … +6 lines (ctrl+o to expand)
   ⎿  Updated frontend/src/lib/rule.ts (+11 -3)
        5  // PUT /rule; the backend validates and normalises it and its a
@@ -2514,7 +2514,7 @@
 
 ● Bash(cat > src/views/CampaignView.test.ts <<'EOF'
       import { flushPromises, mount } from '@vue/test-utils'…)
-  ⎿   RUN  v5.1.0 /home/baykan/workplace/Smart-Campaign-Composer/frontend
+  ⎿   RUN  v5.1.0 ~/workplace/Smart-Campaign-Composer/frontend
      … +5 lines (ctrl+o to expand)
   ⎿  Created frontend/src/views/CampaignView.test.ts (+125 -0)
         1 +import { flushPromises, mount } from '@vue/test-utils'        
@@ -2577,7 +2577,7 @@
 
   Read 1 file, ran 1 shell command (ctrl+o to expand)
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer && sed -i
+● Bash(cd ~/workplace/Smart-Campaign-Composer && sed -i
       "s/expect(w.get('\[data-test=\"channel-sms\"\]').exists()).toBe(true)/expe
       ct(w.find('[data-test=\"ch…)
   ⎿  > lint
@@ -2723,7 +2723,7 @@
 ● Üç ekran beklendiği gibi çalışıyor; yalnızca hız grafiği geniş kartta küçülüp
   ortaya kaydığı için grafiği kart genişliğine yayacağım.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/frontend && python3 -
+● Bash(cd ~/workplace/Smart-Campaign-Composer/frontend && python3 -
       <<'EOF'
       p='src/components/Sparkline.vue'…)
   ⎿        Tests  53 passed (53)
@@ -2771,7 +2771,7 @@
   da maskelenmiş DATABASE_URL. Şimdi PLAN, DECISIONS ve CLAUDE.md dosyalarını
   güncelliyorum.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer && python3 - <<'EOF'
+● Bash(cd ~/workplace/Smart-Campaign-Composer && python3 - <<'EOF'
       p='docs/PLAN.md'…)
   ⎿   M CLAUDE.md
       M DECISIONS.md

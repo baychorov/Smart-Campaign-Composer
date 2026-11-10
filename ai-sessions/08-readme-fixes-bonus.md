@@ -471,7 +471,7 @@
 
 ● Önce PLAN'a iki adımı ekliyorum.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer && python3 - <<'EOF'
+● Bash(cd ~/workplace/Smart-Campaign-Composer && python3 - <<'EOF'
       import re…)
   ⎿  28:| 14 | Teslim | README (kurulum ve mimari özeti), DECISIONS son hal
      i, yetiş
@@ -1054,7 +1054,7 @@
   silinip tekrar yüklenmiyor, satır "Yükleniyor…"da kalıyordu. Ayrıntıyı yeniden
   çekecek şekilde düzeltiyorum.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/frontend/src && python3
+● Bash(cd ~/workplace/Smart-Campaign-Composer/frontend/src && python3
       - <<'EOF'
       p='views/CampaignListView.vue'…)
   ⎿   Test Files  10 passed (10)
@@ -1102,11 +1102,11 @@
 ● Dar ekranda ok işareti ayrı satıra düşüyor ve "Yeni kampanya" iki satıra
   kırılıyor. Düzeltiyorum.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/frontend/src && python3
+● Bash(cd ~/workplace/Smart-Campaign-Composer/frontend/src && python3
       - <<'EOF'
       p='views/CampaignListView.vue'…)
   ⎿   Container smart-campaign-composer-api-1 Healthy
-  ⎿  Shell cwd was reset to /home/baykan/workplace/Smart-Campaign-Composer
+  ⎿  Shell cwd was reset to ~/workplace/Smart-Campaign-Composer
   ⎿  Updated frontend/src/views/CampaignListView.vue (+5 -1)
       316    text-align: center;
       317  }
@@ -1153,7 +1153,7 @@
   ⎿   Container smart-campaign-composer-api-1 Healthy
      delete 26: 204
      DELETE 1
-  ⎿  Shell cwd was reset to /home/baykan/workplace/Smart-Campaign-Composer
+  ⎿  Shell cwd was reset to ~/workplace/Smart-Campaign-Composer
   ⎿  Updated frontend/src/views/CampaignListView.vue (+3 -0)
       360    gap: 4px 14px;
       361    margin-left: auto;
@@ -1510,7 +1510,7 @@
   doğrulayacak. Şimdi tiplerle başlıyorum.
 
 ● Bash(cd
-      /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/segment &&
+      ~/workplace/Smart-Campaign-Composer/backend/internal/segment &&
       python3 - <<'EOF'
       p='rule.go'…)
   ⎿  Updated backend/internal/segment/rule.go (+30 -2)
@@ -1856,7 +1856,7 @@
   yorumu caseRule yapıyorum; diğer paketlerde yalnızca yorumları düzelteceğim.
   Ardından seed'e sınır kohortlarını ekleyeceğim.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/seed
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend/internal/seed
       && python3 - <<'EOF'
       p='cohorts.go'…)
   ⎿  ok
@@ -1934,7 +1934,7 @@
   hesaplayacak.
 
 ● Bash(cd
-      /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/segment &&
+      ~/workplace/Smart-Campaign-Composer/backend/internal/segment &&
       python3 - <<'EOF'
       p='helpers_test.go'…)
   ⎿          compile_test.go:73: SQL
@@ -2396,7 +2396,7 @@
 ● Şema ile başlıyorum. Olay varyantında yalnızca type, event ve occurred
   zorunlu; pencere, sayı ve sıra alanları isteğe bağlı.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/llm &&
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend/internal/llm &&
       python3 - <<'EOF'
       p='segment_schema.json'…)
   ⎿  ok
@@ -3285,8 +3285,8 @@
 ● Backend'i bitirdim ve ücretsiz testler geçiyor; onaylanan ücretli eval'den
   önce yalnızca yeni ve değişen 7 brief'i çalıştırıyorum (~0,05 $).
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer && ls eval/reports/ >
-      /tmp/claude-1000/-home-baykan-workplace-Smart-Campaign-Composer/34481794-8
+● Bash(cd ~/workplace/Smart-Campaign-Composer && ls eval/reports/ >
+      /tmp/claude-1000/-home-user-workplace-Smart-Campaign-Composer/34481794-8
       bdb-4797-a823-…)
   ⎿  docker compose up -d --wait postgres
       Container smart-campaign-composer-postgres-1 Running
@@ -3420,7 +3420,7 @@
   bağımsız yazılmasını söyleyen istisna cümlesi olabileceğini düşünüyorum, bu
   yüzden o cümleyi daraltıyorum.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/llm &&
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend/internal/llm &&
       python3 - <<'EOF'
       p='prompt.go'…)
   ⎿  ok
@@ -3586,7 +3586,7 @@
   then ve min_count alanlarını zorunlu ama boş bırakılabilir hale getiriyorum,
   sınır 16 olacak.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/llm &&
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend/internal/llm &&
       python3 - <<'EOF'
       p='segment_schema.json'…)
   ⎿  ok
@@ -3861,7 +3861,7 @@
   bir tam eval (75 çağrı, yaklaşık 0,75 $) ile ölçeceğim ve repoya girecek
   rapor o olacak.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/llm &&
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend/internal/llm &&
       python3 - <<'EOF'
       p='prompt.go'…)
   ⎿  ok
@@ -3994,7 +3994,7 @@
 ● Önceki tam eval raporunu ve tekrar eden #4/#6/#24 kayıtlarını, ikincisi şema
   değişikliğinin gerekçesi olduğu için, saklıyorum; tekrarı cases-2-13 adıyla
   yeniden adlandırıp şimdi son tam eval'i çalıştıracağım.
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/eval/reports && for e
+● Bash(cd ~/workplace/Smart-Campaign-Composer/eval/reports && for e
       in md json; do mv 2026-11-09T1411-claude-sonnet-5-5.$e
       2026-11-09T1411-cases-4-6-24-clau…)
   ⎿   Container smart-campaign-composer-postgres-1 Healthy
@@ -4175,7 +4175,7 @@
   birini düşüren partial sonuçlarını backend'de unsupported'a zorlayacağım,
   sonra da son bir tam eval çalıştıracağım.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend && python3 -
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend && python3 -
       <<'EOF'
       p='internal/llm/segment_schema.json'…)
   ⎿  ok
@@ -4360,7 +4360,7 @@
 ● Testler geçiyor. Şema derleme sınırına yaklaştığımız için önce 1 çağrıyla
   API'nin şemayı kabul ettiğini kontrol ediyorum, ardından son tam eval:
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer && make eval RUNS=1
+● Bash(cd ~/workplace/Smart-Campaign-Composer && make eval RUNS=1
       CASES=17 2>&1 | grep -E "çalıştırma 1|Doğruluk|hata|error|Error" ; rm -f
       eval/reports/2026…)
   ⎿    #17 çalıştırma 1  ✅ ok · 128 kişi · 4.8 sn
@@ -5635,7 +5635,7 @@
   belirleyen NOWAIT tabanlı bir tasarımla çözeceğim; ardından migration'ı yazıp
   PLAN'a ekleyeceğim.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer && ls
+● Bash(cd ~/workplace/Smart-Campaign-Composer && ls
       backend/migrations; sed -n 1,30p
       backend/migrations/00002_delivery_throttles.sql; python3 - <<'EOF'
       impo…)
@@ -5671,7 +5671,7 @@
       34  **Kaba takvim:**
       35  
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend && cat >
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend && cat >
       migrations/00003_scheduling.sql <<'EOF'
       -- +goose Up…)
   ⎿  internal/campaign/store.go:53:// columns is the select list read by sc
@@ -6227,7 +6227,7 @@
 ● Şimdi kampanya kaydı ve onay. Zaman sınırı kontrolünü saf bir fonksiyon olarak
   yazıyorum; hem modelin önerisinde hem onayda aynı kural kullanılacak.
 ● Bash(cd
-      /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/campaign
+      ~/workplace/Smart-Campaign-Composer/backend/internal/campaign
       && python3 - <<'EOF'
       p='store.go'…)
   ⎿  //  4. Content check with the longest values of the snapshot itself.
@@ -6476,7 +6476,7 @@
 ● Worker tarafında tek değişiklik gerekiyor: zamanlanmış bir kampanya da ilk
   satırı alındığında sending'e geçmeli.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend/internal &&
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend/internal &&
       python3 - <<'EOF'
       p='delivery/store.go'…)
   ⎿  httpapi/progress.go:13:// campaign completed.
@@ -6547,7 +6547,7 @@
   görünümüne zaman alanı.
 
 ● Bash(cd
-      /home/baykan/workplace/Smart-Campaign-Composer/backend/internal/httpapi &&
+      ~/workplace/Smart-Campaign-Composer/backend/internal/httpapi &&
       python3 - <<'EOF'
       p='campaigns.go'…)
   ⎿  campaigns.go
@@ -7366,7 +7366,7 @@
 
 ● Şimdi onay çubuğu, onay kontrolleri ve kampanya sayfası:
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/frontend/src && python3
+● Bash(cd ~/workplace/Smart-Campaign-Composer/frontend/src && python3
       - <<'EOF'
       p='components/ApprovalBar.vue'…)
   ⎿  lib/approval.test.ts:23:    expect(blockingReasons(ready())).toEqual([
@@ -7625,7 +7625,7 @@
   ayrıca önerilen zamanın alana dolması, zamanlanmış onay ve iptal akışı için
   testler ekliyorum:
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/frontend/src && grep -n
+● Bash(cd ~/workplace/Smart-Campaign-Composer/frontend/src && grep -n
       "body: { channels: { sms: true, email: false }, partial_ack: true }"
       views/CampaignVie…)
   ⎿  67:      body: { channels: { sms: true, email: false }, partial_ack: t
@@ -7740,7 +7740,7 @@
 ● gofmt hizalaması yüzünden eşleşmedi; hiçbir değişiklik uygulanmadı. Desenle
   tekrar deniyorum:
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer && python3 - <<'EOF'
+● Bash(cd ~/workplace/Smart-Campaign-Composer && python3 - <<'EOF'
       p='backend/internal/campaign/list.go'…)
   ⎿  done
   ⎿  Updated backend/internal/campaign/list.go (+5 -2)
@@ -7898,7 +7898,7 @@
 
   Ran 1 shell command (ctrl+o to expand)
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend && gofmt -d
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend && gofmt -d
       internal/campaign/campaign.go
       internal/campaign/schedule_integration_test.go | head -20; g…)
   ⎿  diff internal/campaign/campaign.go.orig internal/campaign/campaign.go
@@ -8046,7 +8046,7 @@
 ● Doğrulama 6/6 doğru çıktı; iki brief de tutarlı ve onarım gerekmedi. Raporu bu
   sonuca göre adlandırıp teyit ediyorum.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/eval/reports && python3
+● Bash(cd ~/workplace/Smart-Campaign-Composer/eval/reports && python3
       -c "
       import json…)
   ⎿  2 1 None [] ['Mesaj içeriği: hafta sonu kargo bedava. Bu bir gönderim

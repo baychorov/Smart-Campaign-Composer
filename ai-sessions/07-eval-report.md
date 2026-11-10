@@ -405,7 +405,7 @@
 ● Yanıtlar campaign alanının içinde geliyormuş; script'teki yolları
   düzeltiyorum.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer && sed -i \
+● Bash(cd ~/workplace/Smart-Campaign-Composer && sed -i \
        -e 's/campaign_id=$(jq -r .id <<<"$created")/campaign_id=$(jq -r
       .campaign.id <<<"$created")\n[[…)
   ⎿  74:campaign_id=$(jq -r .campaign.id <<<"$created")
@@ -1753,7 +1753,7 @@
 ● Beş bozmanın beşi de testlerde yakalandı. Şimdi Makefile'a eval ve eval-dry
   hedeflerini ekliyorum.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer && python3 - <<'EOF'
+● Bash(cd ~/workplace/Smart-Campaign-Composer && python3 - <<'EOF'
       p='Makefile'…)
   ⎿  .PHONY: up down smoke test test-unit test-live eval eval-dry test-fron
      tend lint db-up db-down seed seed-reset frontend-deps frontend-dev
@@ -1813,7 +1813,7 @@
 
   Ran 2 shell commands (ctrl+o to expand)
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend && gofmt -d
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend && gofmt -d
       internal/eval/eval_integration_test.go | head -20; gofmt -w
       internal/eval/eval_integration…)  ⎿  diff internal/eval/eval_integration_test.go.orig internal/eval/eval_in
      tegration_test.go
@@ -1850,7 +1850,7 @@
 ● Küçük deneme tamamlandı: 3 çağrı, üç brief de doğru, maliyet yaklaşık 0,02 $.
   Tam değerlendirmeye geçiyorum: 20 brief × 3, onarımlarla en fazla 180 çağrı.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer && make eval 2>&1 |
+● Bash(cd ~/workplace/Smart-Campaign-Composer && make eval 2>&1 |
       tail -75)
   ⎿  docker compose up -d --wait postgres
       Container smart-campaign-composer-postgres-1 Running
@@ -2264,8 +2264,8 @@
   ise üç denemede de partial ve scheduling oldu. Bu raporu kanıt olarak
   eval/reports'a koyup dokümanları güncelleyeceğim.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer &&
-      S=/tmp/claude-1000/-home-baykan-workplace-Smart-Campaign-Composer/95b0f6e0
+● Bash(cd ~/workplace/Smart-Campaign-Composer &&
+      S=/tmp/claude-1000/-home-user-workplace-Smart-Campaign-Composer/95b0f6e0
       -94c3-4282-9de6-219a0ed8e444/scra…)
   ⎿  2026-11-08T1443-claude-sonnet-5-5.json
      2026-11-08T1443-claude-sonnet-5-5.md

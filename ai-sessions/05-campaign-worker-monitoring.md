@@ -1622,7 +1622,7 @@
 ● All three sabotages were caught and the files are restored. Next:
   .env.example, lint and the full test suite.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer && cat >> .env.example
+● Bash(cd ~/workplace/Smart-Campaign-Composer && cat >> .env.example
       <<'EOF'…)
   ⎿  cd backend && go vet ./... && go vet -tags integration ./... && go vet
       -tags live ./...
@@ -3368,7 +3368,7 @@
 
 ❯ tamamdır anladım. Başlayabilirsin                                             
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend && go get
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend && go get
       github.com/prometheus/client_golang/prometheus@latest 2>&1 | tail -3 &&
       grep -n "prometheus"…)
   ⎿  go: added github.com/prometheus/client_golang v1.25.0
