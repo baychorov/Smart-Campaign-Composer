@@ -2,14 +2,15 @@
 
 [![CI](https://github.com/baychorov/Smart-Campaign-Composer/actions/workflows/ci.yml/badge.svg)](https://github.com/baychorov/Smart-Campaign-Composer/actions/workflows/ci.yml)
 
-Pazarlamacı ne istediğini doğal dille yazar. Claude bundan bir hedef kitle ve SMS + email
-mesajları önerir. Pazarlamacı önizler, düzenler ve onaylar. Kampanya kuyruk üzerinden mock
-provider'a gönderilir ve canlı izlenir. Gerçek kimseye mesaj gitmez.
+Pazarlamacı ne istediğini doğal dille yazar, Claude hedef kitleyi ve SMS + email mesajlarını
+önerir. Pazarlamacı düzenleyip onaylar, kampanya mock provider'a gönderilir ve canlı izlenir.
 
 > "Son 30 günde sepetine ürün ekleyip alışveriş yapmayan İstanbul'daki kullanıcılara
 > %30 indirim hatırlatması gönder. Samimi ama kısa olsun."
 
 **Teknolojiler:** Go · Vue 3 + TypeScript · PostgreSQL · Claude API (`claude-sonnet-5-5`)
+
+<br>
 
 ## Kurulum
 
@@ -23,8 +24,7 @@ docker compose up --build
 
 Arayüz: **http://localhost:3000**
 
-Veritabanı, sahte kullanıcılar ve mock provider otomatik kurulur. Varsayılan olarak
-**mock LLM** kullanılır: API key gerekmez, ücret oluşmaz.
+Örnek veri ve mock provider otomatik kurulur. Varsayılan **mock LLM**'dir, API key gerekmez.
 
 **Gerçek Claude ile:**
 
@@ -34,7 +34,9 @@ cp .env.example .env
 docker compose up --build
 ```
 
-**Durdurma:** `make down` (veri korunur), `docker compose down -v` (veri silinir).
+**Durdurma:** `make down` veriyi korur, `docker compose down -v` veriyi siler.
+
+<br>
 
 ## Mimari
 
@@ -50,74 +52,93 @@ flowchart LR
 
 | Servis | Görev |
 |---|---|
-| `web` | Arayüz; `/api` isteklerini API'ye iletir |
-| `api` | Brief'ten kural ve mesaj üretir, onayı alır, kuyruğu yazar, canlı durumu yayınlar |
-| `worker` | Kuyruktan mesajları alır; hız limiti ve retry uygular |
-| `mockprovider` | Sahte SMS/email servisi; rastgele hata, gecikme ve 429 döndürür |
-| `postgres` | Veri ve kuyruk (ayrı bir broker yok) |
+| `web` | Arayüz, `/api` isteklerini API'ye iletir |
+| `api` | Kural ve mesaj üretir, onayı alır, kuyruğu yazar, canlı durumu yayınlar |
+| `worker` | Kuyruktan mesajları gönderir, hız limiti ve retry uygular |
+| `mockprovider` | Sahte SMS/email servisi, rastgele hata, gecikme ve 429 döndürür |
+| `postgres` | Veri ve kuyruk, ayrı bir broker yok |
 | `seed` | Açılışta şemayı ve örnek veriyi yükler |
+
+**Veri modeli**
+
+| Tablo | Ne tutar |
+|---|---|
+| `users` | Ad, soyad, email, telefon, şehir, yaş, SMS ve email izni |
+| `user_events` | Kayıt, ürün inceleme, sepete ekleme ve alışveriş olayları, zamanlarıyla |
+| `campaigns` | Brief, kitle kuralı, mesajlar, seçilen kanallar, durum ve gönderim zamanı |
+| `deliveries` | Kişi ve kanal başına bir mesaj, hem kuyruk hem gönderim kaydı |
+
+Seed sabit bir rastgelelik tohumuyla her kurulumda aynı kullanıcıları ve olayları üretir, olay
+tarihleri kurulum anına göre hesaplanır. 12 şehirde 5.021 sahte
+kullanıcı ve son iki yıla yayılmış 43.334 olay var. Kullanıcıların 3.525'inin SMS, 4.017'sinin
+email izni var. Testler için bilerek konmuş kenar durumları da bu veride.
+
+<br>
 
 ## Akış
 
-1. **Kitle:** Claude brief'ten JSON bir kural üretir. Backend doğrular, kişi sayısı gösterilir.
-2. **Mesaj:** SMS ve email metni ekrana akarak gelir; karakter limitleri kontrol edilir.
-3. **Onay:** Pazarlamacı kanalları ve isterse gönderim zamanını seçip onaylar.
-4. **Gönderim:** Worker mesajları gönderir, dashboard canlı gösterir. Başarısız kalanlar
-   kampanya bitince tekrar gönderilebilir.
-5. **Kampanyalar:** Geçmiş kampanyalar listelenir; taslaklar silinebilir.
+1. **Kitle:** Claude brief'ten JSON kural üretir, backend doğrular ve kişi sayısını gösterir.
+2. **Mesaj:** SMS ve email ekrana akarak gelir, karakter limitleri kontrol edilir.
+3. **Onay:** Pazarlamacı kanalları ve isterse gönderim zamanını seçer.
+4. **Gönderim:** Worker gönderir, dashboard canlı gösterir.
+
+<br>
 
 ## Temel güvenceler
 
-- LLM çıktısı SQL'e girmez; değerler yalnızca SQL parametresi olur.
-- Kanal izni olmayan kişiye mesaj gitmez; izin filtresini LLM veya kullanıcı kaldıramaz.
-- Aynı kişiye aynı mesaj iki kez gitmez (worker çökse veya mesaj tekrar gönderilse de).
-- Kanal başına saniyede en fazla 100 mesaj.
-- SMS ≤ 160, email konusu ≤ 80 karakter; Türkçe karakterler doğru sayılır.
+- LLM çıktısı SQL'e girmez, değerler yalnızca parametre olur.
+- İzni olmayan kişiye mesaj gitmez.
+- Aynı kişiye aynı mesaj iki kez gitmez, worker çökse de.
+- Kanal başına saniyede en fazla 100 mesaj gider.
+- SMS en fazla 160, email konusu en fazla 80 karakterdir.
 - Telefon, email ve API key loglara yazılmaz.
+
+<br>
 
 ## Testler
 
-Gerçek API key gerekmez (ücretli olanlar hariç).
+| Komut | Ne test eder |
+|---|---|
+| `make test-unit` | Kural doğrulama, SQL üretimi, mesaj kuralları, retry, LLM yanıtları |
+| `make test` | Yukarıdakiler, veritabanıyla kitle ve kuyruk testleri, uçtan uca gönderim, arayüz |
+| `make lint` | Kod biçimi ve statik kontroller |
+| `make smoke` | Çalışan sistemde brief'ten gönderime tüm akış |
+| `make eval-dry` | Eval puanlamasının doğruluğu, API çağrısı yapmadan |
+| `make test-live` | Gerçek Claude API ile bağlantı kontrolü, **ücretli** |
+| `make eval` | Gerçek modelle 25 brief × 3 çalıştırma, **ücretli** |
 
-| Komut | Ne test eder | Gerektirir |
-|---|---|---|
-| `make test-unit` | Kural doğrulama, SQL üretimi, mesaj kuralları, retry, LLM yanıtlarının işlenmesi | Go |
-| `make test` | Yukarıdakiler + gerçek veritabanıyla kitle sayıları, kuyruk ve uçtan uca gönderim + arayüz testleri | Go, Node, Docker |
-| `make lint` | Kod biçimi ve statik kontroller (Go ve frontend) | Go, Node |
-| `make smoke` | Çalışan sistemde brief'ten gönderime tüm akış | Çalışan sistem, mock LLM |
-| `make eval-dry` | Eval puanlamasının doğruluğu (ideal yanıtlarla, API çağrısı yok) | Go, Docker |
-| `make test-live` | Gerçek Claude API ile bağlantı kontrolü (2 çağrı) | API key, **ücretli** |
-| `make eval` | Gerçek modelle 25 brief × 3 çalıştırma, doğruluk raporu | API key, **ücretli** |
+&nbsp;
 
-**Model değerlendirmesi:** Son tam eval'de doğruluk ve tutarlılık %100 (75/75). Rapor:
-[`eval/reports/2026-11-09T1416-claude-sonnet-5-5.md`](eval/reports/2026-11-09T1416-claude-sonnet-5-5.md).
-Zamanlanmış gönderim bu ölçümden sonra eklendi; ilgili iki brief ayrıca yeniden ölçüldü
-(6/6, [`rapor`](eval/reports/2026-11-09T1457-cases-2-13-claude-sonnet-5-5.md)).
+- Sistemi çalıştırmak için yalnızca Docker yeterlidir.
+- Testler için ayrıca Go 1.27 ve Node 26 gerekir. Gerekli veritabanını testler kendisi başlatır.
+- Yalnızca `make smoke` için sistemin önceden `docker compose up` ile çalışıyor olması gerekir.
+
+**Model değerlendirmesi:** Son tam eval'de 75/75 doğru ([rapor](eval/reports/2026-11-09T1416-claude-sonnet-5-5.md)).
+Sonradan eklenen zamanlanmış gönderim için iki brief ayrıca ölçüldü, 6/6 ([rapor](eval/reports/2026-11-09T1457-cases-2-13-claude-sonnet-5-5.md)).
+
+<br>
 
 ## Bonus özellikler
 
-- **Zamanlanmış gönderim:** Brief'teki gönderim zamanı onay ekranına dolu gelir, değiştirilebilir; kampanya gönderim başlayana kadar düzenlenebilir veya iptal edilebilir.
-- **CI:** GitHub Actions her push ve pull request'te `make lint`, `make test` ve `make smoke` çalıştırır.
+- **Zamanlanmış gönderim:** Gönderim başlayana kadar düzenlenebilir veya iptal edilebilir.
+- **CI:** Her push ve pull request'te `make lint`, `make test` ve `make smoke` çalışır.
+
+<br>
 
 ## Sınırlar
 
-- Kimlik doğrulama yok; tek `api` ve tek `worker` varsayılır.
-- Desteklenmeyen kitle kriterleri: harcama tutarı, sıralama ("en çok harcayan 500"),
-  ürün/kategori, "en fazla N kez". Bunlar pazarlamacıya açıkça gösterilir.
-- Tüm kitle aynı mesajı alır; email gövdesi düz metindir.
-- SMS sınırı case'teki gibi 160 karakterdir. Gerçekte Türkçe karakterli bir SMS 70
-  karakterde bölünür; gerekçe `docs/DECISIONS-DETAIL.md` D-CONTENT'te.
-- Zamanlanmış gönderim şu andan sonraki herhangi bir an ile 30 gün arasıdır; gönderim başladıktan sonra durdurulamaz.
-- Mock provider kayıtlarını bellekte tutar; yeniden başlarsa istatistikleri ve idempotency kayıtları
-  sıfırlanır. Tekrar gönderimde çift mesajı önleyen son katman bu kayıtlardır (gerçek bir provider
-  bunları kalıcı tutar). `make seed-reset` gönderim id'lerini baştan başlattığı için ardından mock
-  provider da yeniden başlatılmalıdır (`docker compose restart mockprovider`).
-- Bonuslardan A/B varyantları ve kullanıcının diline göre içerik yapılmadı; mesajlar Türkçe üretilir.
+- Kimlik doğrulama yok, tek `api` ve tek `worker` varsayılır.
+- Veri modeli bilerek dar tutuldu. Harcama tutarı, ürün/kategori, cinsiyet gibi alanlar ve sıralama, "en fazla N kez" gibi kriterler desteklenmez. Gerçek bir projede bunlar eklenmeli.
+- Email gövdesi düz metindir. Gerçekte Türkçe karakterli SMS 70 karakterde bölünür.
+- Mock provider kayıtlarını bellekte tutar. `make seed-reset` sonrası `docker compose restart mockprovider` gerekir.
+- A/B varyantları ve kullanıcının diline göre içerik yapılmadı.
+
+<br>
 
 ## Dokümanlar
 
 - [`DECISIONS.md`](DECISIONS.md): önemli kararların özeti
-- [`docs/DECISIONS-DETAIL.md`](docs/DECISIONS-DETAIL.md): kararların ayrıntılı kaydı ve gerekçeleri (D-xx kimlikleri)
+- [`docs/DECISIONS-DETAIL.md`](docs/DECISIONS-DETAIL.md): kararların ayrıntılı kaydı
 - [`docs/PLAN.md`](docs/PLAN.md): uygulama adımları ve eval test seti
 - [`docs/CASE.md`](docs/CASE.md): gereksinimler
 - [`ai-sessions/`](ai-sessions/): Claude Code oturum kayıtları
