@@ -50,6 +50,10 @@ flowchart LR
     K -- "SMS / email" --> M["mockprovider<br/>:8090"]
 ```
 
+&nbsp;
+
+### Servisler
+
 | Servis | Görev |
 |---|---|
 | `web` | Arayüz, `/api` isteklerini API'ye iletir |
@@ -59,7 +63,9 @@ flowchart LR
 | `postgres` | Veri ve kuyruk, ayrı bir broker yok |
 | `seed` | Açılışta şemayı ve örnek veriyi yükler |
 
-**Veri modeli**
+&nbsp;
+
+### Veri modeli
 
 | Tablo | Ne tutar |
 |---|---|
@@ -67,6 +73,8 @@ flowchart LR
 | `user_events` | Kayıt, ürün inceleme, sepete ekleme ve alışveriş olayları, zamanlarıyla |
 | `campaigns` | Brief, kitle kuralı, mesajlar, seçilen kanallar, durum ve gönderim zamanı |
 | `deliveries` | Kişi ve kanal başına bir mesaj, hem kuyruk hem gönderim kaydı |
+
+&nbsp;
 
 Seed sabit bir rastgelelik tohumuyla her kurulumda aynı kullanıcıları ve olayları üretir, olay
 tarihleri kurulum anına göre hesaplanır. 12 şehirde 5.021 sahte
@@ -130,7 +138,6 @@ Sonradan eklenen zamanlanmış gönderim için iki brief ayrıca ölçüldü, 6/
 - Kimlik doğrulama yok, tek `api` ve tek `worker` varsayılır.
 - Veri modeli bilerek dar tutuldu. Harcama tutarı, ürün/kategori, cinsiyet gibi alanlar ve sıralama, "en fazla N kez" gibi kriterler desteklenmez. Gerçek bir projede bunlar eklenmeli.
 - Email gövdesi düz metindir. Gerçekte Türkçe karakterli SMS 70 karakterde bölünür.
-- Mock provider kayıtlarını bellekte tutar. `make seed-reset` sonrası `docker compose restart mockprovider` gerekir.
 - A/B varyantları ve kullanıcının diline göre içerik yapılmadı.
 
 <br>

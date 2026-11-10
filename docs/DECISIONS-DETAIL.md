@@ -336,6 +336,7 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
     - Varsayılanlar: %5 `500`, %3 `429`, %2 kabul et-ama-500, en fazla 50 ms gecikme, seed 42. `/reset` sayaçları sıfırlar ve hata dizisini seed'den yeniden başlatır.
   - **Ayarlar:** `MOCK_*` env değişkenleri `platform.Config`'e değil `mockprovider.Config`'e okunur; yalnızca bu sahte servisi ilgilendirir.
   - **Kişisel veri:** Alıcı ve metin loglanmaz ve `/stats`'a girmez. Logda yalnızca kanal, anahtar (delivery id) ve sonuç bulunur.
+- **Güncelleme (2026-11-11): Bellekteki idempotency kayıtları.** Mock provider anahtarları (delivery id) bellekte tutar. `make seed-reset` veritabanını sıfırlayıp id'leri 1'den başlatırken mock provider çalışmaya devam ederse, aynı anahtar farklı içerikle gelir ve `422` ile kalıcı olarak başarısız olur. Bu durumda `docker compose restart mockprovider` gerekir. `docker compose up` ve `down -v` her şeyi birlikte sıfırladığı için etkilenmez. Gerçek bir provider anahtarları kalıcı tutar.
 
 ## D-SNAPSHOT: Kitlenin hesaplanma zamanı
 
