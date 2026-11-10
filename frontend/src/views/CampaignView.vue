@@ -11,7 +11,7 @@ import { toApiError, useCampaign } from '../composables/useCampaign'
 import { useContentEditor } from '../composables/useContentEditor'
 import { blockingReasons } from '../lib/approval'
 import { displayStatus } from '../lib/labels'
-import { fromTurkeyInput, toTurkeyInput } from '../lib/schedule'
+import { fromTurkeyInput, sendAtIssue, toTurkeyInput } from '../lib/schedule'
 
 // One campaign. A draft shows the workspace (audience | messages + approval
 // bar); after approval the same URL shows the live dashboard.
@@ -35,9 +35,10 @@ const channels = ref({ sms: true, email: true })
 const partialAck = ref(false)
 /** datetime-local value in Turkey time; filled from the brief's suggestion. */
 const sendAt = ref('')
-// The time limits move with the clock; a minute is precise enough.
+// The time limits move with the clock. A few seconds keep "is it still in
+// the future?" current when the chosen minute is the next one.
 const now = ref(new Date())
-const clock = setInterval(() => (now.value = new Date()), 60_000)
+const clock = setInterval(() => (now.value = new Date()), 5_000)
 onUnmounted(() => clearInterval(clock))
 const approving = ref(false)
 const approveIssues = ref<Issue[]>([])
@@ -153,6 +154,7 @@ async function approve() {
           :email-count="campaign.audience?.email ?? 0"
           :partial="campaign.rule.status === 'partial'"
           :reasons="reasons"
+          :time-issue="sendAtIssue(sendAt, now)"
           :busy="approving"
           @approve="approve"
         />
@@ -230,6 +232,11 @@ async function approve() {
   background: var(--bad-soft);
   border-color: transparent;
   color: var(--bad);
+}
+.status.cancelled {
+  background: var(--cancelled-soft);
+  border-color: transparent;
+  color: var(--cancelled);
 }
 .status.completed {
   background: var(--ok-soft);

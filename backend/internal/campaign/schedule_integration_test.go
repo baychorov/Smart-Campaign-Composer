@@ -89,9 +89,10 @@ FROM deliveries WHERE campaign_id = $1`, c.ID, sendAt).Scan(&rows, &due, &first)
 func TestApproveSendAtLimits(t *testing.T) {
 	pool := seededPool(t)
 	for name, at := range map[string]time.Time{
-		"too soon":    testNow.Add(MinScheduleLead - time.Second),
-		"in the past": testNow.Add(-time.Hour),
-		"too far":     testNow.Add(MaxScheduleLead + time.Minute),
+		"now":          testNow,
+		"a second ago": testNow.Add(-time.Second),
+		"in the past":  testNow.Add(-time.Hour),
+		"too far":      testNow.Add(MaxScheduleLead + time.Minute),
 	} {
 		t.Run(name, func(t *testing.T) {
 			svc, c := draft(t, pool, caseRule, goodMessage)
@@ -105,7 +106,7 @@ func TestApproveSendAtLimits(t *testing.T) {
 		})
 	}
 	// The limits themselves are accepted.
-	for _, at := range []time.Time{testNow.Add(MinScheduleLead), testNow.Add(MaxScheduleLead)} {
+	for _, at := range []time.Time{testNow.Add(time.Second), testNow.Add(time.Minute), testNow.Add(MaxScheduleLead)} {
 		svc, c := draft(t, pool, caseRule, goodMessage)
 		if _, _, err := svc.Approve(t.Context(), c.ID, ApproveRequest{SMS: true, SendAt: &at}); err != nil {
 			t.Errorf("send at %v: %v", at, err)

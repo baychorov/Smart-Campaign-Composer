@@ -27,12 +27,14 @@ type ApproveRequest struct {
 }
 
 // checkSendAt returns an issue when t is not a usable send time: it must be
-// at least MinScheduleLead and at most MaxScheduleLead after now.
+// after now and at most MaxScheduleLead after now. How close to now it is
+// is the marketer's choice; a past time would send at once while showing
+// "scheduled", so it is refused.
 func checkSendAt(t, now time.Time) *Issue {
 	switch {
-	case t.Before(now.Add(MinScheduleLead)):
+	case !t.After(now):
 		return &Issue{Path: "send_at", Code: CodeInvalidSendAt,
-			Message: fmt.Sprintf("Gönderim zamanı en erken %d dakika sonrası olabilir.", int(MinScheduleLead.Minutes()))}
+			Message: "Lütfen ileri bir tarih/saat seçiniz."}
 	case t.After(now.Add(MaxScheduleLead)):
 		return &Issue{Path: "send_at", Code: CodeInvalidSendAt,
 			Message: fmt.Sprintf("Gönderim zamanı en fazla %d gün sonrası olabilir.", int(MaxScheduleLead.Hours()/24))}

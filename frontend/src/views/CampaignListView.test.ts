@@ -1,5 +1,6 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent, h, KeepAlive, ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { CampaignListItem, CampaignPage } from '../api/types'
 import { fakeFetch } from '../test/fakeFetch'
@@ -87,6 +88,18 @@ describe('CampaignListView', () => {
     await flushPromises()
     expect(w.get('[data-test="row-9"] [data-test="status"]').text()).toBe('Zamanlandı')
     expect(w.get('[data-test="row-send-at"]').text()).toContain('10:00')
+    expect(w.get('.cols').text()).toContain('Gönderim zamanı')
+  })
+
+  it('gives a cancelled campaign its own badge style, apart from a draft', async () => {
+    const item: CampaignListItem = { ...sentItem, id: 5, status: 'cancelled', send_at: '2026-11-10T07:00:00Z', progress: {} }
+    fakeFetch({ 'GET /api/campaigns?filter=all': () => page([item, draftItem]) })
+    const w = await mountView()
+    await flushPromises()
+    const status = w.get('[data-test="row-5"] [data-test="status"]')
+    expect(status.text()).toBe('İptal edildi')
+    expect(status.classes()).toContain('st-cancelled')
+    expect(w.get('[data-test="row-7"] [data-test="status"]').classes()).not.toContain('st-cancelled')
   })
 
   it('opens a row with the campaign details, loaded once', async () => {
@@ -204,5 +217,54 @@ describe('CampaignListView', () => {
     await flushPromises()
     expect(calls(c).at(-1)).toBe('GET /api/campaigns?filter=all')
     expect(w.findAll('li.row')).toHaveLength(2)
+  })
+
+  // App.vue keeps the list alive while a campaign is open. Coming back, every
+  // row on screen must show its current status, also after "Daha fazla
+  // göster": here a scheduled campaign on the second page was cancelled.
+  it('refreshes every loaded page when the marketer comes back to the list', async () => {
+    const scheduled: CampaignListItem = { ...sentItem, id: 5, status: 'scheduled', send_at: '2026-11-12T07:00:00Z', progress: {} }
+    let second = scheduled
+    const c = fakeFetch({
+      'GET /api/campaigns?filter=all': () => page([sentItem], 8),
+      'GET /api/campaigns?filter=all&before=8': () => page([second]),
+    })
+    const shown = ref(true)
+    const Host = defineComponent(() => () => h(KeepAlive, null, [shown.value ? h(CampaignListView) : h('div')]))
+    await router.replace('/campaigns')
+    const w = mount(Host, { global: { plugins: [router] } })
+    await flushPromises()
+    await w.get('[data-test="more"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-test="row-5"] [data-test="status"]').text()).toBe('Zamanlandı')
+
+    shown.value = false // the campaign page is open; it is cancelled there
+    await flushPromises()
+    second = { ...scheduled, status: 'cancelled' }
+    const before = c.length
+    shown.value = true // back to the list
+    await flushPromises()
+
+    expect(calls(c.slice(before))).toEqual(['GET /api/campaigns?filter=all', 'GET /api/campaigns?filter=all&before=8'])
+    expect(w.get('[data-test="row-5"] [data-test="status"]').text()).toBe('İptal edildi')
+    expect(w.findAll('li.row').map((r) => r.attributes('data-test'))).toEqual(['row-8', 'row-5']) // the same rows, so the scroll position holds
+    expect(w.find('[data-test="more"]').exists()).toBe(false)
+  })
+
+  it('shows no send time or delivery table for a cancelled campaign', async () => {
+    const item: CampaignListItem = { ...sentItem, id: 5, status: 'cancelled', send_at: '2026-11-12T07:00:00Z', progress: {} }
+    const campaign = makeCampaign({ id: 5, status: 'cancelled', approved_at: sentItem.approved_at, send_at: item.send_at, message: goodMessage })
+    fakeFetch({
+      'GET /api/campaigns?filter=all': () => page([item]),
+      'GET /api/campaigns/5': () => ({ json: { campaign } }),
+    })
+    const w = await mountView()
+    await flushPromises()
+    await w.get('[data-test="row-5"] [data-test="toggle"]').trigger('click')
+    await flushPromises()
+    const detail = w.get('[data-test="detail"]')
+    expect(detail.find('[data-test="delivery"]').exists()).toBe(false)
+    expect(detail.text()).not.toContain('Planlanan gönderim')
+    expect(detail.text()).toContain('Onaylandı')
   })
 })

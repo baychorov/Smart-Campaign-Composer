@@ -337,6 +337,7 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
 - **Gerekçe:** Mevcut kuyruk, retry, rate limit ve idempotency hiç değişmeden zamanlanmış gönderime de uygulanır; yeni bir süreç veya altyapı gerekmez (D-DB). Gönderim başladıktan sonra iptal edilememesi yarım gönderilmiş kampanyaları önler.
 - **Alternatifler:** Gönderim anında kitle hesaplayan bir zamanlayıcı döngüsü (yukarıda D-SNAPSHOT güncellemesi), harici zamanlayıcı (pg_cron, iş kuyruğu kütüphaneleri: yeni altyapı), bellekte zamanlayıcı (süreç yeniden başlarsa kaybolur). Zamanı yalnızca pazarlamacının girmesi: brief'te zaten yazılı olanı tekrar girmek gereksiz iş (kullanıcı kararı).
 - **Sınırlar:** Tekrarlayan gönderim yok. Gönderim başladıktan sonra durdurma yok. Onaydan sonra kitleye giren kullanıcılar dahil edilmez. Zamanlanmış kampanyanın zamanı onaydan sonra değiştirilemez; iptal edip yeni kampanya açmak gerekir.
+- **Güncelleme (2026-11-10, kullanıcı kararı): Alt sınır "şu andan sonraki herhangi bir an" oldu.** 5 dakikalık alt sınır teknik bir gereklilik değildi (snapshot onayda yazılır, worker 500 ms'de bir yoklar); iptal için süre bırakmak ve saat farkını karşılamak içindi. Çok yakın bir zaman seçmek pazarlamacının sorumluluğundadır. Geçmiş zaman yine reddedilir: aksi halde "zamanlandı" görünen kampanya anında gönderilirdi. Mesaj: "Lütfen ileri bir tarih/saat seçiniz". Arayüz saati 5 saniyede bir yeniler; dakika klavyeden 00–59 girilir. Üst sınır 30 gün olarak kaldı.
 
 ## D-CI: CI pipeline (Bölüm 9 bonus)
 

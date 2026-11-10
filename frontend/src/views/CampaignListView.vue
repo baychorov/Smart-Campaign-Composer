@@ -45,7 +45,7 @@ const deleteError = ref<string | null>(null)
 // A request token: a slow page of an old filter must not land in a new one.
 let listToken = 0
 
-// Pages loaded so far; a refresh on return only reloads a single page.
+// Pages loaded so far: a refresh on return reloads as many.
 let pages = 0
 
 async function load(more = false) {
@@ -60,6 +60,33 @@ async function load(more = false) {
     pages = more ? pages + 1 : 1
   } catch (e) {
     if (token === listToken) error.value = toApiError(e).message
+  } finally {
+    if (token === listToken) loading.value = false
+  }
+}
+
+// Reloads the pages loaded so far, newest first, and swaps the rows in at
+// once, so the rows on screen get their current status and counts and the
+// scroll position stays valid. A failure leaves the rows as they are.
+async function refresh() {
+  const token = ++listToken
+  const want = Math.max(pages, 1)
+  try {
+    let rows: CampaignListItem[] = []
+    let before: number | null = null
+    let n = 0
+    do {
+      const page = await api.listCampaigns(filter.value, before)
+      if (token !== listToken) return
+      rows = rows.concat(page.campaigns)
+      before = page.next_before
+      n++
+    } while (before && n < want)
+    items.value = rows
+    nextBefore.value = before
+    pages = n
+  } catch {
+    // Not worth an error on screen: the rows are still the last ones loaded.
   } finally {
     if (token === listToken) loading.value = false
   }
@@ -140,15 +167,15 @@ const channelsOf = (it: CampaignListItem) =>
 onMounted(() => void load())
 
 // Back from a campaign (App.vue keeps this page alive): the same rows, open
-// row and scroll position, with fresh statuses and counts. A list that was
-// paged further is left as it is so the scroll position stays valid.
+// row and scroll position, with fresh statuses and counts (e.g. a campaign
+// cancelled on its page), however many pages were loaded.
 let activated = false
 onActivated(() => {
   if (!activated) {
     activated = true // the first activation is the mount itself
     return
   }
-  if (pages <= 1) void load()
+  void refresh()
   // Other cached details may be stale; the open row's stays on screen
   // until its fresh copy arrives.
   const id = openId.value
@@ -189,7 +216,7 @@ onActivated(() => {
       <span>No</span>
       <span>Durum</span>
       <span>Tarih</span>
-      <span>Gönderim</span>
+      <span>Gönderim zamanı</span>
       <span class="right">Kanallar</span>
     </div>
 
@@ -239,7 +266,8 @@ onActivated(() => {
               </ul>
             </section>
 
-            <section v-if="it.status !== 'draft'">
+            <!-- A cancelled campaign has no deliveries left: no table, no send time. -->
+            <section v-if="it.status !== 'draft' && it.status !== 'cancelled'">
               <h3>Gönderim</h3>
               <!-- One row per channel chosen at approval (progress has no others). -->
               <table class="delivery small num" data-test="delivery">
@@ -287,7 +315,7 @@ onActivated(() => {
             <p class="muted small dates">
               Oluşturuldu: {{ formatDate(details[it.id]!.created_at) }}
               <template v-if="details[it.id]!.approved_at"> · Onaylandı: {{ formatDate(details[it.id]!.approved_at!) }}</template>
-              <template v-if="it.status !== 'draft' && details[it.id]!.send_at">
+              <template v-if="it.status !== 'draft' && it.status !== 'cancelled' && details[it.id]!.send_at">
                 · Planlanan gönderim: {{ formatTurkey(details[it.id]!.send_at!) }}
               </template>
             </p>
@@ -424,6 +452,10 @@ h1 {
 .st-scheduled {
   background: var(--scheduled-soft);
   color: var(--scheduled);
+}
+.st-cancelled {
+  background: var(--cancelled-soft);
+  color: var(--cancelled);
 }
 .send-at {
   font-size: var(--text-sm);

@@ -45,7 +45,7 @@ describe('ApprovalBar', () => {
     const later = mountBar({ sendAt: '2026-11-02T18:30' })
     expect((later.get('[data-test="send-date"]').element as HTMLInputElement).value).toBe('2026-11-02')
     expect((later.get('[data-test="send-hour"]').element as HTMLSelectElement).value).toBe('18')
-    expect((later.get('[data-test="send-minute"]').element as HTMLSelectElement).value).toBe('30')
+    expect((later.get('[data-test="send-minute"]').element as HTMLInputElement).value).toBe('30')
     expect(later.text()).not.toContain('Türkiye saati')
     expect(later.get('[data-test="approve"]').text()).toContain('Onayla ve zamanla')
     await later.get('[data-test="send-now"]').trigger('click')
@@ -68,6 +68,36 @@ describe('ApprovalBar', () => {
     expect(later.emitted('update:sendAt')![1]).toEqual(['2026-11-02T21:45']) // keeps the new hour
     await later.get('[data-test="send-date"]').setValue('')
     expect(later.emitted('update:sendAt')![2]).toEqual([''])
+  })
+
+  it('takes any minute typed from 00 to 59', async () => {
+    const bar = mountBar({ sendAt: '2026-11-02T10:00' })
+    const minute = bar.get('[data-test="send-minute"]')
+    const el = minute.element as HTMLInputElement
+
+    await minute.setValue('37') // two digits apply while typing
+    expect(bar.emitted('update:sendAt')!.at(-1)).toEqual(['2026-11-02T10:37'])
+
+    el.value = '7' // one digit is padded on leaving the field
+    await minute.trigger('change')
+    expect(bar.emitted('update:sendAt')!.at(-1)).toEqual(['2026-11-02T10:07'])
+    expect(el.value).toBe('07')
+
+    const before = bar.emitted('update:sendAt')!.length
+    el.value = '75' // out of range: not applied, put back
+    await minute.trigger('input')
+    await minute.trigger('change')
+    expect(bar.emitted('update:sendAt')!).toHaveLength(before)
+    expect(el.value).toBe('07') // back to the last valid minute
+  })
+
+  it('shows a send time issue in red', () => {
+    const issue = 'Lütfen ileri bir tarih/saat seçiniz'
+    const bar = mountBar({ sendAt: '2026-11-01T09:00', reasons: ['En az bir kanal seç', issue], timeIssue: issue })
+    const pills = bar.findAll('.reasons li')
+    expect(pills.find((p) => p.text() === issue)!.classes()).toContain('bad')
+    expect(pills.find((p) => p.text() === 'En az bir kanal seç')!.classes()).not.toContain('bad')
+    expect(bar.get('.send-at').classes()).toContain('invalid')
   })
 
   it('reports channel changes and the click', async () => {

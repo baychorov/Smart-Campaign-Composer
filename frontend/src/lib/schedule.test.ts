@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatTurkey, fromTurkeyInput, HOURS, joinSendAt, minuteOptions, sendAtIssue, splitSendAt, toTurkeyInput } from './schedule'
+import { formatTurkey, fromTurkeyInput, HOURS, joinSendAt, parseMinute, PAST_SEND_AT, sendAtIssue, splitSendAt, toTurkeyInput } from './schedule'
 
 describe('send time helpers', () => {
   it('converts between API times and Turkey input values in any browser zone', () => {
@@ -13,8 +13,10 @@ describe('send time helpers', () => {
   it('checks the same limits as the backend', () => {
     const now = new Date('2026-11-01T09:00:00Z') // 12:00 in Turkey
     expect(sendAtIssue('', now)).toBeNull()
-    expect(sendAtIssue('2026-11-01T12:04', now)).toContain('5 dakika')
-    expect(sendAtIssue('2026-11-01T12:05', now)).toBeNull()
+    expect(sendAtIssue('2026-11-01T11:00', now)).toBe(PAST_SEND_AT)
+    expect(sendAtIssue('2026-10-31T12:30', now)).toBe(PAST_SEND_AT) // an earlier day
+    expect(sendAtIssue('2026-11-01T12:00', now)).toBe(PAST_SEND_AT) // the current minute has begun
+    expect(sendAtIssue('2026-11-01T12:01', now)).toBeNull() // the next minute is fine
     expect(sendAtIssue('2026-12-01T12:00', now)).toBeNull()
     expect(sendAtIssue('2026-12-01T12:01', now)).toContain('30 gün')
   })
@@ -30,11 +32,12 @@ describe('send time helpers', () => {
     expect(joinSendAt('', '18', '05')).toBe('') // no date: send now
   })
 
-  it('offers minutes in steps of 5 and keeps an off-grid current minute', () => {
-    expect(minuteOptions('')).toEqual(['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'])
-    expect(minuteOptions('30')).toHaveLength(12)
-    const odd = minuteOptions('07')
-    expect(odd).toHaveLength(13)
-    expect(odd.slice(0, 3)).toEqual(['00', '05', '07'])
+  it('reads a typed minute from 00 to 59', () => {
+    expect(parseMinute('7')).toBe('07')
+    expect(parseMinute('07')).toBe('07')
+    expect(parseMinute('00')).toBe('00')
+    expect(parseMinute('59')).toBe('59')
+    expect(parseMinute(' 33 ')).toBe('33')
+    for (const bad of ['', '60', '99', '-1', 'ab', '1a', '123', '4.5']) expect(parseMinute(bad)).toBeNull()
   })
 })

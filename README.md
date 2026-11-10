@@ -107,7 +107,7 @@ Zamanlanmış gönderim bu ölçümden sonra eklendi; ilgili iki brief ayrıca y
 - Tüm kitle aynı mesajı alır; email gövdesi düz metindir.
 - SMS sınırı case'teki gibi 160 karakterdir. Gerçekte Türkçe karakterli bir SMS 70
   karakterde bölünür; gerekçe `DECISIONS.md` D-CONTENT'te.
-- Zamanlanmış gönderim 5 dakika ile 30 gün arasıdır; gönderim başladıktan sonra durdurulamaz.
+- Zamanlanmış gönderim şu andan sonraki herhangi bir an ile 30 gün arasıdır; gönderim başladıktan sonra durdurulamaz.
 - Mock provider kayıtlarını bellekte tutar; yeniden başlarsa istatistikleri sıfırlanır.
 - Kullanıcının diline göre içerik yapılmadı; mesajlar Türkçe üretilir.
 

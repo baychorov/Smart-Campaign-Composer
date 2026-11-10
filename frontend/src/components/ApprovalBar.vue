@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { formatCount } from '../lib/labels'
-import { HOURS, joinSendAt, minuteOptions, splitSendAt } from '../lib/schedule'
+import { HOURS, joinSendAt, parseMinute, splitSendAt } from '../lib/schedule'
 
 // The fixed bar at the bottom of the draft: channel choice (D-CHANNEL), the
 // send time (PLAN step 15a: empty sends now; a time the model read from the
@@ -14,6 +14,8 @@ const props = defineProps<{
   partial: boolean
   reasons: string[]
   busy: boolean
+  /** Why the chosen send time cannot be used; shown in red. */
+  timeIssue?: string | null
 }>()
 
 // defineModel: two-way bound values (v-model on the parent).
@@ -30,10 +32,22 @@ const setChannel = (k: 'sms' | 'email', v: boolean) => (channels.value = { ...ch
 // Date, hour and minute are separate fields so the time is always 24-hour
 // (lib/schedule.ts). Clearing the date means "send now".
 const parts = computed(() => splitSendAt(sendAt.value))
-const minutes = computed(() => minuteOptions(parts.value.minute))
 function setPart(part: 'date' | 'hour' | 'minute', v: string) {
   const p = { ...parts.value, [part]: v }
   sendAt.value = joinSendAt(p.date, p.hour, p.minute)
+}
+
+// The minute is typed (00–59). Two valid digits apply at once; on leaving
+// the field a single digit is padded ("7" → "07") and anything else is put
+// back to the current minute.
+function typeMinute(el: HTMLInputElement) {
+  const m = el.value.length === 2 ? parseMinute(el.value) : null
+  if (m) setPart('minute', m)
+}
+function commitMinute(el: HTMLInputElement) {
+  const m = parseMinute(el.value)
+  if (m) setPart('minute', m)
+  el.value = m ?? parts.value.minute
 }
 </script>
 
@@ -52,7 +66,7 @@ function setPart(part: 'date' | 'hour' | 'minute', v: string) {
         </label>
       </fieldset>
 
-      <div class="send-at" role="group" aria-labelledby="send-at-label">
+      <div class="send-at" :class="{ invalid: timeIssue }" role="group" aria-labelledby="send-at-label">
         <span id="send-at-label">Gönderim zamanı</span>
         <input
           type="date"
@@ -73,16 +87,20 @@ function setPart(part: 'date' | 'hour' | 'minute', v: string) {
             <option v-for="h in HOURS" :key="h" :value="h">{{ h }}</option>
           </select>
           <span aria-hidden="true">:</span>
-          <select
+          <input
+            type="text"
+            inputmode="numeric"
+            maxlength="2"
+            class="minute"
             aria-label="Dakika"
             data-test="send-minute"
+            placeholder="--"
             :value="parts.minute"
             :disabled="!parts.date"
-            @change="setPart('minute', ($event.target as HTMLSelectElement).value)"
-          >
-            <option v-if="!parts.date" value="">--</option>
-            <option v-for="m in minutes" :key="m" :value="m">{{ m }}</option>
-          </select>
+            @focus="($event.target as HTMLInputElement).select()"
+            @input="typeMinute($event.target as HTMLInputElement)"
+            @change="commitMinute($event.target as HTMLInputElement)"
+          />
         </span>
         <button v-if="sendAt" type="button" class="btn btn-sm" data-test="send-now" @click="sendAt = ''">Şimdi gönder</button>
         <span v-else class="muted now">boş: hemen gönderilir</span>
@@ -94,7 +112,7 @@ function setPart(part: 'date' | 'hour' | 'minute', v: string) {
       </label>
 
       <ul class="reasons" aria-live="polite">
-        <li v-for="r in reasons" :key="r">{{ r }}</li>
+        <li v-for="r in reasons" :key="r" :class="{ bad: r === timeIssue }">{{ r }}</li>
       </ul>
 
       <button type="button" class="btn btn-primary btn-lg" data-test="approve" :disabled="reasons.length > 0 || busy" @click="emit('approve')">
@@ -191,8 +209,17 @@ input[type='checkbox'] {
 .send-at select:hover:not(:disabled) {
   border-color: var(--muted);
 }
-.send-at select:disabled {
+.send-at select:disabled,
+.send-at input:disabled {
   cursor: not-allowed;
+}
+.minute {
+  width: 2.75rem;
+  text-align: center;
+}
+.send-at.invalid input,
+.send-at.invalid select {
+  border-color: var(--bad);
 }
 .now {
   font-size: var(--text-xs);
@@ -226,5 +253,11 @@ input[type='checkbox'] {
   border: 1px solid var(--line);
   border-radius: 62.4375rem;
   padding: 0.125rem 0.625rem;
+}
+.reasons li.bad {
+  font-weight: 500;
+  color: var(--bad);
+  background: var(--bad-soft);
+  border-color: color-mix(in srgb, var(--bad) 45%, transparent);
 }
 </style>

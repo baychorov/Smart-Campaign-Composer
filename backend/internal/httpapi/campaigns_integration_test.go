@@ -568,10 +568,10 @@ func TestScheduleAndCancel(t *testing.T) {
 		t.Fatalf("save content: %d %v", status, out)
 	}
 
-	// A time too soon is refused; the marketer's own time is used.
-	status, out = api.do("POST", path+"/approve", `{"channels":{"sms":true,"email":true},"send_at":"2026-06-15T12:01:00Z"}`)
+	// A past time is refused; the marketer's own time is used.
+	status, out = api.do("POST", path+"/approve", `{"channels":{"sms":true,"email":true},"send_at":"2026-06-15T11:59:00Z"}`)
 	if status != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(out["issues"]), "invalid_send_at") {
-		t.Fatalf("too soon: %d %v", status, out)
+		t.Fatalf("past time: %d %v", status, out)
 	}
 	status, out = api.do("POST", path+"/approve", `{"channels":{"sms":true,"email":true},"send_at":"2026-06-17T09:30:00+03:00"}`)
 	if status != http.StatusOK {

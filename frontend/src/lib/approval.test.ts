@@ -22,7 +22,8 @@ const smsTooLong = {
 
 describe('blockingReasons', () => {
   it('blocks a send time outside the limits, allows one inside', () => {
-    expect(blockingReasons(ready({ sendAt: '2026-11-01T12:01' }))).toEqual(['Gönderim zamanı en erken 5 dakika sonrası olabilir'])
+    expect(blockingReasons(ready({ sendAt: '2026-11-01T11:59' }))).toEqual(['Lütfen ileri bir tarih/saat seçiniz'])
+    expect(blockingReasons(ready({ sendAt: '2026-11-01T12:01' }))).toEqual([])
     expect(blockingReasons(ready({ sendAt: '2026-11-02T10:00' }))).toEqual([])
   })
 

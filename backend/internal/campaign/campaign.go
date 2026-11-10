@@ -27,11 +27,9 @@ const (
 	StatusCancelled Status = "cancelled" // a scheduled campaign stopped before sending
 )
 
-// Send time limits for a scheduled campaign (PLAN step 15a).
-const (
-	MinScheduleLead = 5 * time.Minute
-	MaxScheduleLead = 30 * 24 * time.Hour
-)
+// MaxScheduleLead is the latest send time of a scheduled campaign, counted
+// from now. The earliest is any moment after now (PLAN step 15a).
+const MaxScheduleLead = 30 * 24 * time.Hour
 
 // transitions is the state machine. Every change of campaigns.status must
 // be one of these edges, and is written as

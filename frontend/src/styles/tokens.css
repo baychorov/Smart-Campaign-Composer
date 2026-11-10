@@ -38,6 +38,9 @@
   /* Scheduled: a clear cobalt blue, apart from --info and the greys */
   --scheduled: #3460c8;
   --scheduled-soft: #e8eefc;
+  /* Cancelled: orange, so it is not mistaken for a grey draft */
+  --cancelled: #c2561a;
+  --cancelled-soft: #fdefe4;
   --variable: #7a5fc0;
   --variable-soft: #f2eefb;
 
