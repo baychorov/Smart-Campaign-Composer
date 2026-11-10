@@ -51,8 +51,9 @@ export function formatCount(n: number): string {
   return n.toLocaleString('tr-TR')
 }
 
+/** An API time in Turkey time, like the send times (lib/schedule.ts), whatever the browser's zone. */
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })
+  return new Date(iso).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'medium', timeStyle: 'short' })
 }
 
 /** The rule summary as one sentence, e.g. on the audience card. */

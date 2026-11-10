@@ -27,6 +27,12 @@ const stream = useEventStream({
     progress.value = p
     rates.value = [...rates.value, p.rate_per_second].slice(-RATE_HISTORY)
     if (p.done) stream.close()
+    // Reopened for editing elsewhere (another tab): the page reloads the
+    // campaign and shows the workspace instead of this dashboard.
+    if (p.status === 'draft') {
+      stream.close()
+      emit('reload')
+    }
   },
 })
 
@@ -137,7 +143,8 @@ async function retryFailed() {
 const approvedAt = computed(() => {
   if (!props.campaign.approved_at) return null
   const d = new Date(props.campaign.approved_at)
-  return { date: d.toLocaleDateString('tr-TR'), time: d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) }
+  const timeZone = 'Europe/Istanbul' // like the send time, whatever the browser's zone
+  return { date: d.toLocaleDateString('tr-TR', { timeZone }), time: d.toLocaleTimeString('tr-TR', { timeZone, hour: '2-digit', minute: '2-digit' }) }
 })
 </script>
 

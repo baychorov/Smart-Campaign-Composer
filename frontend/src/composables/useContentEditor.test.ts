@@ -65,6 +65,42 @@ describe('useContentEditor', () => {
     expect(calls.map((c) => c.method)).toEqual(['POST'])
   })
 
+  it('shows the stored message again after a failed regeneration, so the screen matches what approval sends', async () => {
+    fakeFetch({ 'POST /api/campaigns/7/content/generations': () => ({ status: 202, json: { id: 'G4', events_url: '' } }) })
+    const { editor } = setup(makeCampaign({ message: goodMessage, content_validation: validValidation }))
+    await editor.generate()
+    const es = FakeEventSource.last()
+    es.emit('sms.delta', { text: 'yarım kalan' })
+    es.emit('failed', { code: 'llm_unavailable', message: 'Claude\'a şu anda ulaşılamıyor.' })
+    expect(editor.gen.value.phase).toBe('failed')
+    expect(editor.draft.value).toEqual(goodMessage)
+    expect(editor.dirty.value).toBe(false)
+  })
+
+  it('ends a refused stream as a failure and forgets it, instead of waiting forever', async () => {
+    sessionStorage.setItem('scc.generation.7', 'GONE') // e.g. the API restarted since
+    fakeFetch({})
+    const { editor } = setup(makeCampaign({ message: goodMessage, content_validation: validValidation }))
+    expect(editor.running.value).toBe(true)
+    FakeEventSource.last().fail(2)
+    await flush()
+    expect(editor.running.value).toBe(false)
+    expect(editor.gen.value.phase).toBe('failed')
+    expect(editor.gen.value.failure?.code).toBe('stream')
+    expect(editor.draft.value).toEqual(goodMessage)
+    expect(sessionStorage.getItem('scc.generation.7')).toBeNull()
+  })
+
+  it('keeps waiting while the browser retries a dropped stream', async () => {
+    sessionStorage.setItem('scc.generation.7', 'G5')
+    fakeFetch({})
+    const { editor } = setup()
+    FakeEventSource.last().fail(0)
+    await flush()
+    expect(editor.running.value).toBe(true)
+    expect(sessionStorage.getItem('scc.generation.7')).toBe('G5')
+  })
+
   it('follows a generation started before a reload instead of starting a new one', () => {
     sessionStorage.setItem('scc.generation.7', 'G3')
     const calls = fakeFetch({})

@@ -21,9 +21,18 @@ watch(
   () => props.value,
   (n) => (local.value = n),
 )
+// The field is disabled while the change is saved. If the backend refused
+// it, the value did not change; the box shows the stored value again.
+watch(
+  () => props.disabled,
+  (now, before) => {
+    if (before && !now) local.value = props.value
+  },
+)
 
 function commit() {
-  const n = Math.round(Number(local.value))
+  // An emptied box is not 0: it snaps back like any invalid entry.
+  const n = String(local.value).trim() === '' ? NaN : Math.round(Number(local.value))
   if (!Number.isFinite(n) || n === props.value) {
     local.value = props.value
     return

@@ -1,4 +1,4 @@
-import { computed, ref, type Ref } from 'vue'
+import { computed, ref, watch, type Ref } from 'vue'
 import { api } from '../api/client'
 import type { Campaign, Message, MessageField } from '../api/types'
 import { applyEvent, emptyMessage, GENERATION_EVENTS, initialGen, isRunning, TERMINAL_EVENTS } from '../lib/generation'
@@ -55,11 +55,34 @@ export function useContentEditor(
       if (name === 'validated') void save()
       // An invalid candidate stays in the editor for the marketer to fix.
       if (name === 'invalid') dirty.value = true
+      // A failed generation leaves nothing new: the editor shows the stored
+      // message again, the one an approval would send.
+      if (name === 'failed') showStored()
     },
     createSource,
   })
 
   const running = computed(() => isRunning(gen.value.phase))
+
+  // The stream was refused (e.g. the API restarted and no longer knows the
+  // generation, or it expired): it ends as a failure instead of waiting
+  // forever, and the stored id is dropped so a reload does not retry it.
+  watch(stream.state, (s) => {
+    if (s !== 'error' || !running.value) return
+    writeStored(campaignId, null)
+    gen.value = {
+      ...gen.value,
+      phase: 'failed',
+      current: null,
+      failure: { code: 'stream', message: 'Üretimin bağlantısı kesildi.' },
+    }
+    showStored()
+  })
+
+  function showStored() {
+    draft.value = { ...(campaign.value?.message ?? emptyMessage()) }
+    dirty.value = false
+  }
 
   /** Loads the stored message, or resumes a generation started before a reload. */
   function init(c: Campaign) {

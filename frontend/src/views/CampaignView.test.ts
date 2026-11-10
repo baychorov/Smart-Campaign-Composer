@@ -255,6 +255,22 @@ describe('CampaignView', () => {
     expect((w.get('[data-test="send-date"]').element as HTMLInputElement).value).toBe('2026-11-02')
   })
 
+  it('opens the workspace by itself when the live state says the campaign was reopened in another tab', async () => {
+    const scheduled = makeCampaign({ status: 'scheduled', approved_at: '2026-11-01T09:00:00Z', send_at: '2026-11-02T07:00:00Z', message: goodMessage })
+    let current = scheduled
+    fakeFetch({ 'GET /api/campaigns/7': () => ({ json: { campaign: current } }) })
+    const w = mountView()
+    await flushPromises()
+    const es = FakeEventSource.last()
+    current = { ...scheduled, status: 'draft', approved_at: null, content_validation: validValidation }
+    es.emit('progress', progress({ status: 'draft', channels: {}, rate_per_second: 0, top_errors: [] }))
+    await flushPromises()
+
+    expect(es.closed).toBe(true)
+    expect(w.get('[data-test="status"]').text()).toBe('Taslak')
+    expect((w.get('textarea').element as HTMLTextAreaElement).value).toBe(goodMessage.sms)
+  })
+
   it('shows that sending won when the edit comes too late', async () => {
     const scheduled = makeCampaign({ status: 'scheduled', approved_at: '2026-11-01T09:00:00Z', send_at: '2026-11-02T07:00:00Z' })
     let current = scheduled
