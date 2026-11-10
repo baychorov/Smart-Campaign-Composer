@@ -312,9 +312,20 @@ func TestCampaignErrors(t *testing.T) {
 	if status != 422 || out["error"] != "invalid_rule" || len(out["issues"].([]any)) == 0 {
 		t.Fatalf("invalid rule edit: %d %v", status, out)
 	}
+	// An edit changes conditions, not the model's verdict: a partial rule
+	// cannot become ok (that would skip the acknowledgement, D-PARTIAL).
 	status, out = api.do("PUT", partialPath+"/rule", `{"rule":`+caseRuleJSON+`}`)
-	if status != 200 || campaignOf(t, out)["rule"].(map[string]any)["status"] != "ok" {
+	if status != 422 || out["error"] != "invalid_rule" || !strings.Contains(fmtAny(out["issues"]), campaign.CodeRuleLocked) {
+		t.Fatalf("partial rule edited to ok: %d %v", status, out)
+	}
+	edited := strings.Replace(partial, `["İzmir"]`, `["İzmir","Bursa"]`, 1)
+	status, out = api.do("PUT", partialPath+"/rule", `{"rule":`+edited+`}`)
+	if r := campaignOf(t, out)["rule"].(map[string]any); status != 200 || r["status"] != "partial" || !strings.Contains(fmtAny(r), "Bursa") {
 		t.Fatalf("valid rule edit: %d %v", status, out)
+	}
+	// A rejected brief has no audience to edit.
+	if status, out = api.do("PUT", rejectedPath+"/rule", `{"rule":`+caseRuleJSON+`}`); status != 422 || out["error"] != "rule_not_approvable" {
+		t.Fatalf("rejected rule edited: %d %v", status, out)
 	}
 
 	tests := []struct {

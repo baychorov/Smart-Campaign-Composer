@@ -114,3 +114,45 @@ func TestContentIssuesFollowChannels(t *testing.T) {
 		})
 	}
 }
+
+// TestLockedChanges: a rule edit may change conditions, never the model's
+// verdict (D-PARTIAL). Removing a group renumbers the criteria's group
+// index, which is allowed.
+func TestLockedChanges(t *testing.T) {
+	zero, one := 0, 1
+	base := segment.Rule{Status: segment.StatusPartial, AudienceScope: segment.ScopeFiltered,
+		Unsupported: []segment.Unsupported{{Text: "sadık", Reason: segment.ReasonUnknownField, Group: &one}}}
+	tests := []struct {
+		name string
+		edit func(r *segment.Rule)
+		want []string // paths of the issues
+	}{
+		{"unchanged", func(r *segment.Rule) {}, nil},
+		{"group renumbered", func(r *segment.Rule) { r.Unsupported[0].Group = &zero }, nil},
+		{"group dropped", func(r *segment.Rule) { r.Unsupported[0].Group = nil }, nil},
+		{"partial to ok", func(r *segment.Rule) { r.Status = segment.StatusOK; r.Unsupported = nil }, []string{"status", "unsupported"}},
+		{"scope", func(r *segment.Rule) { r.AudienceScope = segment.ScopeAll }, []string{"audience_scope"}},
+		{"criterion text", func(r *segment.Rule) { r.Unsupported[0].Text = "x" }, []string{"unsupported"}},
+		{"criterion reason", func(r *segment.Rule) { r.Unsupported[0].Reason = segment.ReasonAggregate }, []string{"unsupported"}},
+		{"criterion added", func(r *segment.Rule) {
+			r.Unsupported = append(r.Unsupported, segment.Unsupported{Text: "y", Reason: segment.ReasonRanking})
+		}, []string{"unsupported"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			next := base
+			next.Unsupported = slices.Clone(base.Unsupported)
+			tt.edit(&next)
+			var got []string
+			for _, is := range lockedChanges(base, next) {
+				if is.Code != CodeRuleLocked {
+					t.Errorf("code %q", is.Code)
+				}
+				got = append(got, is.Path)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("issues at %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

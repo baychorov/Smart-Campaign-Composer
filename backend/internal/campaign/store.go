@@ -137,6 +137,14 @@ func (s *Service) Get(ctx context.Context, id int64) (Campaign, error) {
 // UpdateRule replaces the rule of a draft with a marketer-edited one. The
 // rule is validated and stored normalised; with validation errors nothing
 // is stored and a *RuleError is returned. The result carries the warnings.
+//
+// An edit changes the conditions only (D-FE: remove conditions or values,
+// change numbers). The model's verdict stays: the status, the audience
+// scope and the criteria that could not be applied must be the stored
+// ones (CodeRuleLocked otherwise). Without this, an API client could turn
+// a partial rule into ok and skip the acknowledgement (D-PARTIAL), or give
+// a rejected brief an audience. A rule that is not approvable cannot be
+// edited at all (ErrNotApprovable): it has no conditions to edit.
 func (s *Service) UpdateRule(ctx context.Context, id int64, rule segment.Rule) (Campaign, segment.Result, error) {
 	v := segment.Validate(rule)
 	if !v.Valid() {
@@ -148,8 +156,54 @@ func (s *Service) UpdateRule(ctx context.Context, id int64, rule segment.Rule) (
 	}
 	ctx, cancel := context.WithTimeout(ctx, dbTimeout)
 	defer cancel()
+
+	stored, err := s.Get(ctx, id)
+	if err != nil {
+		return Campaign{}, v, err
+	}
+	if stored.Status != StatusDraft {
+		return Campaign{}, v, ErrNotDraft
+	}
+	sv := segment.Validate(stored.Rule)
+	if !sv.Approvable() {
+		return Campaign{}, v, ErrNotApprovable
+	}
+	if issues := lockedChanges(sv.Rule, v.Rule); len(issues) > 0 {
+		return Campaign{}, v, &RuleError{Issues: issues}
+	}
+	// Two edits at the same time both started from a rule with these
+	// locked parts, so whichever is stored last keeps them too.
 	c, err := s.updateDraft(ctx, id, `rule = $3`, b)
 	return c, v, err
+}
+
+// CodeRuleLocked: a rule edit tried to change the model's verdict (status,
+// audience scope or the criteria that could not be applied).
+const CodeRuleLocked = "rule_locked"
+
+// lockedChanges lists the parts of the model's verdict that next changes
+// compared with stored. Both rules are normalised. The group index of an
+// unsupported criterion may change: removing a group renumbers the others.
+func lockedChanges(stored, next segment.Rule) []segment.Issue {
+	var issues []segment.Issue
+	locked := func(path, msg string) {
+		issues = append(issues, segment.Issue{Path: path, Code: CodeRuleLocked, Message: msg})
+	}
+	if next.Status != stored.Status {
+		locked("status", "Kuralın durumu düzenlemeyle değiştirilemez.")
+	}
+	if next.AudienceScope != stored.AudienceScope {
+		locked("audience_scope", "Kitle kapsamı düzenlemeyle değiştirilemez.")
+	}
+	same := len(next.Unsupported) == len(stored.Unsupported)
+	for i := 0; same && i < len(next.Unsupported); i++ {
+		a, b := next.Unsupported[i], stored.Unsupported[i]
+		same = a.Text == b.Text && a.Reason == b.Reason
+	}
+	if !same {
+		locked("unsupported", "Uygulanmayan kriterler düzenlemeyle değiştirilemez.")
+	}
+	return issues
 }
 
 // SaveContent stores the draft's message and returns its validation, made
