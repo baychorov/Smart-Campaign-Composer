@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -43,6 +44,10 @@ type Server struct {
 	progressEvery time.Duration
 	// pingEvery is the SSE keep-alive interval.
 	pingEvery time.Duration
+	// closing is closed by CloseStreams: open SSE streams end, so a
+	// graceful shutdown does not wait for them.
+	closing   chan struct{}
+	closeOnce sync.Once
 }
 
 const (
@@ -59,7 +64,16 @@ func New(cfg Config) *Server {
 		cfg.Now = time.Now
 	}
 	return &Server{cfg: cfg, gens: newRegistry(generationTTL, cfg.Now), llm: newLLMMetrics(cfg.Metrics),
-		pingEvery: 15 * time.Second, progressEvery: time.Second}
+		pingEvery: 15 * time.Second, progressEvery: time.Second, closing: make(chan struct{})}
+}
+
+// CloseStreams ends every open SSE stream. Register it with
+// http.Server.RegisterOnShutdown: Shutdown waits for active requests, and a
+// stream (a scheduled campaign's dashboard stays open for days) would
+// otherwise hold it up until its deadline. Clients reconnect by themselves
+// (EventSource); a generation is followed again with Last-Event-ID.
+func (s *Server) CloseStreams() {
+	s.closeOnce.Do(func() { close(s.closing) })
 }
 
 // Register adds the API routes to mux.
@@ -205,6 +219,8 @@ func (s *Server) generationEvents(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			// The client disconnected. The generation keeps running and can
 			// be followed again with Last-Event-ID.
+			return
+		case <-s.closing:
 			return
 		}
 	}

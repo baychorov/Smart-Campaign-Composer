@@ -38,6 +38,8 @@ func (s *Server) campaignEvents(w http.ResponseWriter, r *http.Request) {
 		case <-tick.C:
 		case <-r.Context().Done():
 			return
+		case <-s.closing:
+			return
 		}
 		next, err := s.cfg.Campaigns.Progress(r.Context(), id)
 		if err != nil {

@@ -67,9 +67,12 @@ func run(log *slog.Logger) error {
 
 	log.Info("starting api", "config", cfg)
 	// No WriteTimeout: SSE responses are long-lived (D-STREAM).
-	return platform.ServeHTTP(ctx, &http.Server{
+	srv := &http.Server{
 		Addr:              cfg.APIAddr,
 		Handler:           platform.NewHTTPMetrics(reg).Wrap(mux),
 		ReadHeaderTimeout: 10 * time.Second,
-	})
+	}
+	// Open SSE streams end at shutdown instead of holding it up.
+	srv.RegisterOnShutdown(api.CloseStreams)
+	return platform.ServeHTTP(ctx, srv)
 }
