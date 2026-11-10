@@ -27,13 +27,15 @@ cd Smart-Campaign-Composer
 
 İki moddan birini seç. Veritabanı, sahte kullanıcılar ve mock provider iki modda da otomatik kurulur.
 
-Mock LLM ile, API key gerekmez ve ücret oluşmaz:
+**Mock LLM ile**, API key gerekmez ve ücret oluşmaz:
 
 ```bash
 docker compose up --build
 ```
 
-API key ile, gerçek Claude kullanılır:
+Bu modda kural ve mesajlar her brief için aynı demo yanıttır. Brief'e göre üretim için API key gerekir.
+
+**API key ile**, gerçek Claude kullanılır:
 
 ```bash
 cp .env.example .env
@@ -103,6 +105,30 @@ email izni var. Testler için bilerek konmuş kenar durumları da bu veride.
 
 <br>
 
+## Ekran görüntüleri
+
+Görüntüler gerçek Claude API ile alındı.
+
+&nbsp;
+
+**Brief**
+
+![Brief ekranı](docs/images/brief.png)
+
+&nbsp;
+
+**Taslak: kitle, mesajlar ve onay**
+
+![Taslak ekranı](docs/images/draft.png)
+
+&nbsp;
+
+**Gönderim dashboard'u**
+
+![Gönderim dashboard'u](docs/images/dashboard.png)
+
+<br>
+
 ## Temel güvenceler
 
 - LLM çıktısı SQL'e girmez, değerler yalnızca parametre olur.
@@ -111,6 +137,22 @@ email izni var. Testler için bilerek konmuş kenar durumları da bu veride.
 - Kanal başına saniyede en fazla 100 mesaj gider.
 - SMS en fazla 160, email konusu en fazla 80 karakterdir.
 - Telefon, email ve API key loglara yazılmaz.
+
+<br>
+
+## Sağlık ve metrikler
+
+| Adres | Ne gösterir |
+|---|---|
+| `localhost:8080/healthz`, `/readyz` | API sağlık kontrolü, `/readyz` veritabanını da kontrol eder |
+| `localhost:8080/metrics` | API metrikleri: HTTP istekleri, LLM çağrıları, onarımlar, token |
+| `localhost:8081/metrics` | Worker metrikleri: gönderim sonuçları, provider süreleri, kuyruk durumu |
+| `localhost:8090/stats` | Mock provider'ın gördüğü istekler, hatalar ve saniyedeki en yüksek hız |
+
+&nbsp;
+
+Retry'ı ve başarısız mesajları tekrar göndermeyi denemek için `.env`'de `MOCK_ERROR_RATE=0.5` yapıp
+`docker compose up` ile yeniden başlatmak yeterli. `.env` yoksa önce `cp .env.example .env` çalıştırılır.
 
 <br>
 
@@ -131,6 +173,8 @@ email izni var. Testler için bilerek konmuş kenar durumları da bu veride.
 - Sistemi çalıştırmak için yalnızca Docker yeterlidir.
 - Testler için ayrıca Go 1.27 ve Node 26 gerekir. Gerekli veritabanını testler kendisi başlatır.
 - Yalnızca `make smoke` için sistemin önceden `docker compose up` ile çalışıyor olması gerekir.
+
+&nbsp;
 
 **Model değerlendirmesi:** Son tam eval'de 75/75 doğru ([rapor](eval/reports/2026-11-09T1416-claude-sonnet-5-5.md)).
 Sonradan eklenen zamanlanmış gönderim için iki brief ayrıca ölçüldü, 6/6 ([rapor](eval/reports/2026-11-09T1457-cases-2-13-claude-sonnet-5-5.md)).
