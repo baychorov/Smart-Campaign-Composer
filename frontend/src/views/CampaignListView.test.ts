@@ -109,7 +109,13 @@ describe('CampaignListView', () => {
     expect(detail.get('[data-test="detail-sms"] .msg-box').text()).toBe(goodMessage.sms)
     expect(detail.get('[data-test="detail-email"] .mail-subject').text()).toBe(goodMessage.email_subject)
     expect(detail.get('[data-test="detail-email"] .mail-body').text()).toBe(goodMessage.email_body.trim())
-    expect(detail.text()).toContain('Kanallar: SMS')
+    // Audience: only the description; the counts are in the delivery table.
+    expect(detail.text()).not.toContain('Onay anında')
+    // Delivery: no "Kanallar" line, one table row per chosen channel.
+    expect(detail.text()).not.toContain('Kanallar:')
+    const rows = detail.findAll('[data-test="delivery"] tbody tr')
+    expect(rows.map((r) => r.get('th').text())).toEqual(['SMS'])
+    expect(rows[0]!.findAll('td').map((td) => td.text())).toEqual(['110', '108', '2', '0', '0'])
     // Only drafts can be deleted.
     expect(detail.find('[data-test="delete"]').exists()).toBe(false)
 

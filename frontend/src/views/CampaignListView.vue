@@ -137,9 +137,6 @@ async function deleteDraft(id: number) {
 const channelsOf = (it: CampaignListItem) =>
   CHANNELS.flatMap(([key, label]) => (it.progress[key] ? [{ key, label, c: it.progress[key] as ChannelProgress }] : []))
 
-const chosenChannels = (c: Campaign) =>
-  [c.channels.sms && 'SMS', c.channels.email && 'Email'].filter(Boolean).join(' + ') || '—'
-
 onMounted(() => void load())
 
 // Back from a campaign (App.vue keeps this page alive): the same rows, open
@@ -235,11 +232,6 @@ onActivated(() => {
             <section>
               <h3>Kitle</h3>
               <p>{{ audienceSentence(details[it.id]!.summary) }}</p>
-              <p v-if="details[it.id]!.audience" class="muted small">
-                {{ details[it.id]!.audience!.snapshot ? 'Onay anında' : 'Şu an' }}:
-                <b class="num">{{ formatCount(details[it.id]!.audience!.reachable) }}</b> kişi · SMS
-                {{ formatCount(details[it.id]!.audience!.sms) }} · Email {{ formatCount(details[it.id]!.audience!.email) }}
-              </p>
               <ul v-if="details[it.id]!.rule.unsupported.length" class="unsupported small">
                 <li v-for="(u, i) in details[it.id]!.rule.unsupported" :key="i">
                   Uygulanmadı: “{{ u.text }}” <span class="muted">({{ REASON_LABELS[u.reason] }})</span>
@@ -249,8 +241,8 @@ onActivated(() => {
 
             <section v-if="it.status !== 'draft'">
               <h3>Gönderim</h3>
-              <p class="small">Kanallar: {{ chosenChannels(details[it.id]!) }}</p>
-              <table class="small num">
+              <!-- One row per channel chosen at approval (progress has no others). -->
+              <table class="delivery small num" data-test="delivery">
                 <thead>
                   <tr>
                     <th></th>
@@ -514,22 +506,38 @@ h1 {
   padding-left: 1.125rem;
   color: var(--warn);
 }
-table {
+/* Delivery counts: the channel column starts flush with the "Gönderim"
+   heading; the number columns share one width so they line up evenly. */
+.delivery {
   border-collapse: collapse;
-  margin-top: 0.375rem;
+  margin-top: 0.5rem;
 }
-th,
-td {
-  padding: 0.25rem 0.75rem 0.25rem 0;
+.delivery th,
+.delivery td {
+  padding: 0.4375rem 0 0.4375rem 2rem;
+  min-width: 6.5rem;
   text-align: right;
   font-weight: 400;
 }
-thead th {
-  color: var(--muted);
-}
-tbody th {
+.delivery th:first-child {
+  padding-left: 0;
+  min-width: 4rem;
   text-align: left;
-  font-weight: 500;
+}
+.delivery thead th {
+  padding-top: 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+.delivery tbody tr + tr > * {
+  border-top: 1px solid var(--line);
+}
+.delivery tbody th {
+  font-weight: 600;
+}
+.delivery tbody tr:last-child > * {
+  padding-bottom: 0;
 }
 /* Messages: one block per channel, the e-mail as a small mail (subject
    over body), so the parts read apart at a glance. */
