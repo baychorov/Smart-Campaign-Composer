@@ -174,6 +174,7 @@ Retry'ı ve başarısız mesajları tekrar göndermeyi denemek için `.env`'de `
 - Sistemi çalıştırmak için yalnızca Docker yeterlidir.
 - Testler için ayrıca Go 1.27 ve Node 26 gerekir. Gerekli veritabanını testler kendisi başlatır.
 - Yalnızca `make smoke` için sistemin önceden `docker compose up` ile çalışıyor olması gerekir.
+- `make smoke` ayrıca `curl` ve `jq` kullanır.
 
 &nbsp;
 
@@ -193,7 +194,7 @@ Sonradan eklenen zamanlanmış gönderim için iki brief ayrıca ölçüldü, 6/
 
 - Kimlik doğrulama yok, tek `api` ve tek `worker` varsayılır.
 - Veri modeli bilerek dar tutuldu. Harcama tutarı, ürün/kategori, cinsiyet gibi alanlar ve sıralama, "en fazla N kez" gibi kriterler desteklenmez. Gerçek bir projede bunlar eklenmeli.
-- Email gövdesi düz metindir. Gerçekte Türkçe karakterli SMS 70 karakterde bölünür.
+- Email gövdesi düz metindir. Gerçekte Türkçe karakterli SMS 70 karakteri aşınca bölünür.
 - A/B varyantları ve kullanıcının diline göre içerik yapılmadı.
 
 <br>

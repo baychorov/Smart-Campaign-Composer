@@ -50,7 +50,7 @@ Bir karar değişirse eski metin silinmez; kaydın altına tarihli bir "Güncell
   - LLM'den SQL üretip parse etmek: R-AUD-1'in amacına aykırı ve güvenlik yüzeyi geniş.
 - **Sınırlar:**
   - Desteklenmeyen kriterler: sıra/zamansal ilişki ("sepete ekledikten sonra"), sayı ve toplam ("en az 3 sipariş"), sıralama ("en çok harcayan 500"), ürün veya kategori detayı, kesin tarih aralığı, veride olmayan alanlar.
-  - Bunlar `unsupported` listesine kapalı bir sebep kodlarıyla yazılır: `sequence`, `aggregate`, `ranking`, `unknown_field`, `absolute_date`, `scheduling`, `contradiction`, `too_complex`, `off_topic`.
+  - Bunlar `unsupported` listesine kapalı sebep kodlarıyla yazılır: `sequence`, `aggregate`, `ranking`, `unknown_field`, `absolute_date`, `scheduling`, `contradiction`, `too_complex`, `off_topic`.
   - İfade edilemeyen bir koşul yalnızca kendi grubundan düşer. Bütün bir grup asla düşürülmez. Boşalan grup `unsupported` sayılır.
   - Tüm gruplar aynı mesajı alır. Gruba özel içerik A/B bonusunun kapsamındadır.
 - **Güncelleme (2026-11-06, PLAN adım 4):**
