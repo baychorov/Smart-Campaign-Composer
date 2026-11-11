@@ -22,6 +22,8 @@ Claude Code kullanımında her oturumun aynı kurallarla çalışması için şu
 
 ## 1. Kod yapısı: özellik bazlı paketler
 
+Backend için Go'yu seçtim. Araştırmalarım sonucunda aynı anda çalışan işlerin ve uzun süre açık kalan bağlantıların çok olduğu bu projeye Go'nun daha iyi uyacağını düşündüm. Ayrıca Go ile bir proje geliştirmek de istiyordum.
+
 Python'da clean architecture ile çalışmaya alışkınım, o nedenle ilk iş olarak Go'da bu prensibin en doğru karşılığının
 ne olduğunu araştırdım. Burada Gemini'nin deep research özelliğinden faydalandım. Sonuç olarak en doğru karşılığın `domain/ports/adapters`
 gibi tam bir hexagonal yapı olduğunu öğrendim. Ancak burada akışın daha lineer formda olmasından ve fazla hâkim olmadığım bir dilde işi daha sade ve modüler tutmak istememden ötürü paketlerin teknik katmana göre değil, işe göre ayrılmasını istedim: `segment`, `content`, `llm`, `campaign`,
@@ -33,7 +35,7 @@ LLM istemcisi, SMS/email provider'ı ve worker'ın kuyruk erişimi. Geri kalan h
 ## 2. Kuyruk için ayrı bir sistem yok, sadece Postgres
 
 Redis, RabbitMQ veya hazır bir kuyruk kütüphanesi yerine kuyruğu Postgres tablosu olarak
-kendimizin yazmasının bu senaryo için en uygunu olacağını düşündüm. Bunun sebebi ise kampanya durumu ve gönderim kuyruğunun
+kendimiz yazmanın bu senaryo için en uygunu olacağını düşündüm. Bunun sebebi ise kampanya durumu ve gönderim kuyruğunun
 aynı transaction'da yazılabilmesinin iki sistem arasındaki tutarsızlık riskini ortadan kaldırdığını öğrenmiş olmam. Kanal
 başına saniyede 100 mesaj Postgres için oldukça hafif bir yük. Ayrıca claim, retry ve kilit mantığının
 bize ait olması da güvenilirliği göstermemi kolaylaştırdı.
@@ -51,7 +53,7 @@ koşul her gruba ayrı ayrı yazılırsa, model birinde unutabilir ve o grubun k
 sessizce genişler. Ortak koşullar bunu engelliyor.
 
 Yapı iç içe olmadığından Claude'un JSON şeması garantisi
-korunuyor. Ancak en fazla 5 grup var, daha fazlasının hem okunması zorlaşıyor hem de sorguyu büyütüyor.
+korunuyor. Ancak en fazla 5 grup var, daha fazlası hem okunmayı zorlaştırıyor hem de sorguyu büyütüyor.
 
 **Kural asla SQL'e çevrilmiş metin olarak gelmez.** Model sadece JSON üretir, backend
 doğrular, kolon adları koddaki sabit bir tablodan gelir, değerler parametre olur. İzin
@@ -66,8 +68,7 @@ yalnızca yapı için olup birkaç istisnası olduğundan her yanıt backend'de 
 doğrulanıyor. Hata varsa en fazla 2 kez onarım isteniyor. `refusal` veya `max_tokens`
 ile biten yanıtlar hiç parse edilmiyor. Burada alternatif olarak tool use'u ele aldım. Ancak araştırmalarımda JSON almak için tool kullanmanın, tool'u `tool_choice` ile zorlamaya dayandığını ve Sonnet 5.5'in bunu desteklemediğini gördüm. Bu yüzden seçimim structured output oldu.
 
-Model olarak Sonnet 5.5'i seçtim. Claude, Opus 5.5'i önermişti, ama bu iş kısa bir çıkarım ve metin üretimi olduğundan Sonnet daha hızlı ve daha ucuz olup yeterli geldi. Kitle çıkarımının doğruluğunu eval ile ölçtüm (25 hazır brief ×
-3 çalıştırma, %100 başarı).
+Model olarak Sonnet 5.5'i seçtim. Claude, Opus 5.5'i önermişti, ama bu iş kısa bir çıkarım ve metin üretimi olduğundan Sonnet daha hızlı ve daha ucuz olup yeterli geldi. Kitle çıkarımının doğruluğunu eval ile ölçtüm. Son tam eval'de 25 hazır brief × 3 çalıştırmada %100 başarı aldım.
 
 ## 5. Son kararı insan verir
 
@@ -117,7 +118,7 @@ Gerçekte Türkçe karakter (ı, ş, ğ) içeren bir SMS'e yalnızca 70 karakter
 
 ## 11. Testler API key olmadan çalışır
 
-LLM için sahte bir istemci yazıldı, bu yüzden `make test` hiçbir zaman gerçek API'ye bağlanmıyor. Gerçek API sadece `make test-live` ve `make eval` ile kullanılıyor. Bunlar ücretli olduğu için onları yalnızca gerekli durumlarda çalıştırdım. Eval, kuralı yapısına göre değil sabit veride seçtiği kişilere göre puanlıyor. Aynı kitle farklı şekillerde yazılabildiği için asıl önemli olan modelin doğru kişileri seçmesi.
+LLM için sahte bir istemci yazıldı, bu yüzden `make test` hiçbir zaman gerçek API'ye bağlanmıyor. Gerçek API sadece `make test-live` ve `make eval` ile kullanılıyor. Bunlar ücretli olduğu için onları yalnızca gerekli durumlarda çalıştırdım. Eval, kuralı yapısına göre değil sabit veride seçtiği kişilere göre puanlıyor. Aynı kitle farklı şekillerde yazılabildiği için asıl önemli olan modelin doğru kişileri seçmesi. Claude'un yazdığı testlerin gerçekten hata yakaladığından emin olmak için kodu bilerek bozup testlerin kırıldığını kontrol ettim.
 
 ## 12. Frontend
 

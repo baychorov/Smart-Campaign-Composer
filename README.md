@@ -19,7 +19,7 @@ Yalnızca Docker gerekir.
 **1. Repoyu klonla**
 
 ```bash
-git clone git@github.com:baychorov/Smart-Campaign-Composer.git
+git clone https://github.com/baychorov/Smart-Campaign-Composer.git
 cd Smart-Campaign-Composer
 ```
 
@@ -90,9 +90,9 @@ flowchart LR
 &nbsp;
 
 Seed sabit bir rastgelelik tohumuyla her kurulumda aynı kullanıcıları ve olayları üretir, olay
-tarihleri kurulum anına göre hesaplanır. 12 şehirde 5.021 sahte
-kullanıcı ve son iki yıla yayılmış 43.334 olay var. Kullanıcıların 3.525'inin SMS, 4.017'sinin
-email izni var. Testler için bilerek konmuş kenar durumları da bu veride.
+tarihleri kurulum anına göre hesaplanır. 12 şehirde 5.021 sahte kullanıcı ve son iki yıla yayılmış
+43.334 olay var. Kullanıcıların 3.525'inin SMS, 4.017'sinin email izni var. Testler için bilerek
+konmuş kenar durumları da bu veride.
 
 <br>
 
@@ -183,7 +183,7 @@ Sonradan eklenen zamanlanmış gönderim için iki brief ayrıca ölçüldü, 6/
 
 ## Bonus özellikler
 
-- **Zamanlanmış gönderim:** Gönderim başlayana kadar düzenlenebilir veya iptal edilebilir.
+- **Zamanlanmış gönderim:** Kampanya ileri bir tarihe zamanlanabilir, brief'teki zaman otomatik önerilir. Gönderim başlayana kadar düzenlenebilir veya iptal edilebilir.
 - **CI:** Her push ve pull request'te `make lint`, `make test` ve `make smoke` çalışır.
 
 <br>
