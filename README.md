@@ -14,7 +14,12 @@ Pazarlamacı ne istediğini doğal dille yazar, Claude hedef kitleyi ve SMS + em
 
 ## Kurulum
 
-Yalnızca Docker gerekir. 3000, 5432, 8080, 8081 ve 8090 portları boş olmalı.
+> **Not:** Proje Ubuntu 24.04'te geliştirildi ve test edildi, CI da Ubuntu'da çalışıyor.
+
+- Yalnızca Docker (Compose v2, `docker compose`) gerekir.
+- 3000, 5432, 8080, 8081 ve 8090 portları boş olmalı.
+
+&nbsp;
 
 **1. Repoyu klonla**
 
@@ -170,9 +175,11 @@ Retry'ı ve başarısız mesajları tekrar göndermeyi denemek için `.env`'de `
 
 &nbsp;
 
-- Proje Ubuntu 24.04'te geliştirildi ve test edildi, CI da Ubuntu'da çalışıyor.
 - Sistemi çalıştırmak için yalnızca Docker yeterlidir.
-- Testler için ayrıca Go 1.27 ve Node 26 gerekir. Gerekli veritabanını testler kendisi başlatır.
+- Testler için ayrıca şunlar gerekir:
+  - Go 1.27 ve Node 26
+  - `make` ve gcc (Ubuntu'da `sudo apt install build-essential`)
+- Gerekli veritabanını testler kendisi başlatır.
 - Yalnızca `make smoke` için sistemin önceden `docker compose up` ile çalışıyor olması gerekir.
 - `make smoke` ayrıca `curl` ve `jq` kullanır.
 
