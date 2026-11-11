@@ -470,7 +470,7 @@
 ● Backend bitti. Şimdi frontend: schedule yardımcıları, dakika alanı ve kırmızı
   uyarı.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/frontend && python3 -
+● Bash(cd ~/workplace/Smart-Campaign-Composer/frontend && python3 -
       <<'EOF'
       p='src/lib/schedule.ts'…)
   ⎿  52:export function parseMinute(typed: string): string | null {
@@ -3821,7 +3821,7 @@
   gösteriyor. Bu yüzden frontend'de değişiklik gerekmiyor. Şimdi prompt'u
   güncelliyorum:
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend && python3 -
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend && python3 -
       <<'EOF'
       p='internal/llm/prompt.go'…)
   ⎿  ok
@@ -4340,7 +4340,7 @@
 
   Searched for 1 pattern (ctrl+o to expand)
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend && python3 -
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend && python3 -
       <<'EOF'
       p='internal/content/template.go'…)
   ⎿  internal/content/template.go:92:        parts, errs := parse(tmpl)
@@ -4778,7 +4778,7 @@
   yeni kurala göre güncelliyorum: {{city}} ve şehir adı ("İstanbul") mesajda
   olmamalı.
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer/backend && python3 -
+● Bash(cd ~/workplace/Smart-Campaign-Composer/backend && python3 -
       <<'EOF'
       p='internal/llm/live_content_test.go'…)
   ⎿  ok
@@ -5108,7 +5108,7 @@
   testte değişiklik gerektirir; şu an o pakete dokunmuyorum. Geçmiş kampanyalar
   için ek kontrol eklemiyor, sonucu PLAN notuna yazıyorum. · summary
 
-● Bash(cd /home/baykan/workplace/Smart-Campaign-Composer && python3 - <<'EOF'
+● Bash(cd ~/workplace/Smart-Campaign-Composer && python3 - <<'EOF'
       p='docs/PLAN.md'…)
   ⎿   frontend/src/lib/text.ts                           |  2 -
       frontend/src/views/CampaignView.test.ts            | 12 +++
