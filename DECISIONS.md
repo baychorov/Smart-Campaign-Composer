@@ -15,9 +15,10 @@ Claude Code kullanımında her oturumun aynı kurallarla çalışması için şu
 
 - **CLAUDE.md:** Gevşetilmeyecek kurallar burada. Örneğin LLM çıktısı asla SQL'e girmiyor, her özellik testiyle geliyor.
 - **backend/CLAUDE.md:** Go'ya özgü kurallar. Claude yalnızca backend'de çalışırken okuyor, kök dosya kısa kalıyor.
-- **docs/PLAN.md:** Uygulamayı adımlara böldüm. Her adım bitince durum ve kısa bir not eklendi, ben kontrol ettikten sonra sonrakine geçildi.
+- **docs/PLAN.md:** Uygulamayı adımlara böldüm. Önce çekirdek akışı uçtan uca çalışır hale getirdim, bonusları ve ekstraları en sona bıraktım. Her adım bitince kısa bir not eklendi, ben kontrol ettikten sonra sonrakine geçildi.
 - **docs/DECISIONS-DETAIL.md:** Teknik kararların ayrıntılı kaydı. Claude'un önceki kararlarla çelişmemesini sağladı.
 - **docs/CASE.md:** Claude'un case gereksinimlerini analiz edebilmesi ve kontrolde bana yardımcı olabilmesi için bu dosyayı oluşturdum.
+- **Teslim öncesi denetim:** Teslimden önce sistemi uçtan uca denetlettim, bulunan hataları testleriyle düzelttim.
 - **Güvenlik ve maliyet:** `.env` dosyasının okunması engellendi. Ücretli komutlar yalnızca benim onayımla çalıştırıldı.
 
 ## 1. Kod yapısı: özellik bazlı paketler
@@ -110,15 +111,21 @@ provider'da aslında teslim edilmiş bir mesaj ikinci kez gitmiyor.
 
 ## 9. Retry ve hız limiti
 
-Retry durumunun bellekte değil veritabanında tutulmasının daha güvenli olduğunu düşündüm. Bu sayede worker yeniden başlasa da kaybolmuyor. Geçici hatalarda üstel bekleme ve rastgele sapma (jitter) var, en fazla 5 deneme yapılıyor. 429'da provider'ın söylediği kadar bekleniyor. Bu bir mesaj hatası olmadığından 5 denemeye sayılmıyor, ayrı bir sayaçla takip ediliyor. Hız limiti kanal başına ayrı olduğundan email'deki bir sorun SMS'i durdurmuyor. Ağ gecikmesi yüzünden istekler provider'a üst üste gelebiliyor. Sınırın biraz altında kalmanın daha güvenli olacağını düşündüğümden worker saniyede 95 mesajla gönderiyor.
+Retry durumunun bellekte değil veritabanında tutulmasının daha güvenli olduğunu düşündüm. Bu sayede worker yeniden başlasa da kaybolmuyor. Geçici hatalarda üstel bekleme ve rastgele sapma (jitter) var, en fazla 5 deneme yapılıyor. 429'da provider'ın söylediği kadar bekleniyor. Bu bir mesaj hatası olmadığından 5 denemeye sayılmıyor, ayrı bir sayaçla takip ediliyor.
+
+Hız limiti kanal başına ayrı olduğundan email'deki bir sorun SMS'i durdurmuyor. Ağ gecikmesi yüzünden istekler provider'a üst üste gelebiliyor. Sınırın biraz altında kalmanın daha güvenli olacağını düşündüğümden worker saniyede 95 mesajla gönderiyor.
 
 ## 10. SMS sınırı 160 karakter
 
-Gerçekte Türkçe karakter (ı, ş, ğ) içeren bir SMS'e yalnızca 70 karakter sığdığı konusunda Claude bilgi verdi. Daha uzun mesaj parçalara bölünüyor ve her parça ayrı SMS olarak ücretleniyor. Yani 160 karakterlik Türkçe bir SMS aslında 3 SMS ediyor. Sınırı 70'e düşürmeyi düşündüm ama vazgeçtim, çünkü case açıkça 160 diyor ve 70 karakter pazarlama metni için çok kısa kalıyor. Gerçek bir sistemde ise sınırı karakterle değil SMS parça sayısıyla koyar ve onaydan önce maliyeti gösterirdim.
+Gerçekte Türkçe karakter (ı, ş, ğ) içeren bir SMS'e yalnızca 70 karakter sığdığı konusunda Claude bilgi verdi. Daha uzun mesaj parçalara bölünüyor ve her parça ayrı SMS olarak ücretleniyor. Yani 160 karakterlik Türkçe bir SMS aslında 3 SMS ediyor.
+
+Sınırı 70'e düşürmeyi düşündüm ama vazgeçtim, çünkü case açıkça 160 diyor ve 70 karakter pazarlama metni için çok kısa kalıyor. Gerçek bir sistemde ise sınırı karakterle değil SMS parça sayısıyla koyar ve onaydan önce maliyeti gösterirdim.
 
 ## 11. Testler API key olmadan çalışır
 
-LLM için sahte bir istemci yazıldı, bu yüzden `make test` hiçbir zaman gerçek API'ye bağlanmıyor. Gerçek API sadece `make test-live` ve `make eval` ile kullanılıyor. Bunlar ücretli olduğu için onları yalnızca gerekli durumlarda çalıştırdım. Eval, kuralı yapısına göre değil sabit veride seçtiği kişilere göre puanlıyor. Aynı kitle farklı şekillerde yazılabildiği için asıl önemli olan modelin doğru kişileri seçmesi. Claude'un yazdığı testlerin gerçekten hata yakaladığından emin olmak için kodu bilerek bozup testlerin kırıldığını kontrol ettim.
+LLM için sahte bir istemci yazıldı, bu yüzden `make test` hiçbir zaman gerçek API'ye bağlanmıyor. Gerçek API sadece `make test-live` ve `make eval` ile kullanılıyor. Bunlar ücretli olduğu için onları yalnızca gerekli durumlarda çalıştırdım. Eval, kuralı yapısına göre değil sabit veride seçtiği kişilere göre puanlıyor. Aynı kitle farklı şekillerde yazılabildiği için asıl önemli olan modelin doğru kişileri seçmesi.
+
+Claude'un yazdığı testlerin gerçekten hata yakaladığından emin olmak için kodu bilerek bozup testlerin kırıldığını kontrol ettim.
 
 ## 12. Frontend
 
@@ -136,14 +143,14 @@ Arayüzü sade ve modern tutmak istedim. Pazarlamacının yalnızca karar vermes
 ## Ekstralar
 
 - **Kampanya listesi:** Geçmiş kampanyalar listeleniyor, durum, numara ve tarihe göre filtrelenebiliyor. Taslaklar silinebiliyor.
-- **Başarısızları tekrar gönderme:** Gönderim bittikten sonra başarısız kalan mesajlar tekrar gönderilebiliyor. Aynı mesaj kimliğiyle gönderildiği için daha önce teslim edilmiş bir mesaj ikinci kez gitmiyor.
+- **Başarısızları tekrar gönderme:** Gönderim bittikten sonra başarısız kalan mesajlar tekrar gönderilebiliyor. Ayrıntısı 8. bölümde.
 
 ## Yetişmeyenler ve tercihler
 
 - **Kimlik doğrulama ve birden fazla worker/API:** Çekirdek akışa öncelik verdim. Hız sınırı her worker'ın kendi içinde tutulduğu için birden fazla worker toplamda sınırı aşar. Mesaj üretimi de API'nin belleğinde tutulduğundan tek API varsayılıyor.
 - **Kullanıcının diline göre içerik:** En başta varsayım yaparken Türkiye'yi baz aldım, mesajlar Türkçe üretiliyor.
-- **Desteklenmeyen kitle kriterleri:** Harcama tutarı, ürün/kategori, sıralama ("en çok harcayan 500 kişi") ve "en fazla N kez". Model bunları sessizce atlamıyor, pazarlamacıya açıkça listeliyor. Veritabanını sade tutmak adına çekirdek akış için gerekli olan minimum alanlarla ilerledim. Gerçek bir üründe tutar ve ürün/kategori mutlaka eklenmesi gereken alanlar olurdu, sıralama ve "en fazla N kez" ise kural yapısına eklenmesi gereken koşullar.
-- **A/B varyantları:** Projeye başlarken çekirdek akışı kurduktan sonra eklemeyi istiyordum ancak zaman kısıtından ötürü backend tarafında büyük değişiklikler gerektirdiğinden eklememe kararı aldım. Fakat özellikle pazarlama sektörü için çok faydalı ve kritik bir özellik olduğunun bilincindeyim. Gerçek hayatta çalışan bir sistemde oldukça fark yaratır.
+- **Desteklenmeyen kitle kriterleri:** Harcama tutarı, ürün/kategori, sıralama ("en çok harcayan 500 kişi") ve "en fazla N kez". Model bunları sessizce atlamıyor, pazarlamacıya açıkça listeliyor. Veritabanını sade tutmak için çekirdek akışa yetecek alanlarla ilerledim. Gerçek bir üründe tutar ve ürün/kategori mutlaka eklenmesi gereken alanlar olurdu, sıralama ve "en fazla N kez" ise kural yapısına eklenmesi gereken koşullar.
+- **A/B varyantları:** Projeye başlarken çekirdek akışı kurduktan sonra eklemeyi istiyordum ancak zaman kısıtından ötürü backend tarafında büyük değişiklikler gerektirdiğinden eklememe kararı aldım. Fakat özellikle pazarlama sektörü için çok faydalı ve kritik bir özellik olduğunun bilincindeyim.
 - **Abonelikten çıkma metni:** Mesajlara ret/çıkış bilgisi eklenmiyor. Gerçek bir sistemde bu bilgi gönderim sırasında her mesajın sonuna otomatik eklenmeli.
 - **Email formatı:** Email gövdesi düz metin olarak gönderiliyor, HTML desteği yok.
 - **Mesaj üretimi kaydı:** Mesaj üretimi bitmeden sayfa kapatılırsa sonuç kayboluyor ve sayfaya dönüldüğünde yeniden üretiliyor.
