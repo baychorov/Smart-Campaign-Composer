@@ -153,4 +153,3 @@ Arayüzü sade ve modern tutmak istedim. Pazarlamacının yalnızca karar vermes
 - **A/B varyantları:** Projeye başlarken çekirdek akışı kurduktan sonra eklemeyi istiyordum ancak zaman kısıtından ötürü backend tarafında büyük değişiklikler gerektirdiğinden eklememe kararı aldım. Fakat özellikle pazarlama sektörü için çok faydalı ve kritik bir özellik olduğunun bilincindeyim.
 - **Abonelikten çıkma metni:** Mesajlara ret/çıkış bilgisi eklenmiyor. Gerçek bir sistemde bu bilgi gönderim sırasında her mesajın sonuna otomatik eklenmeli.
 - **Email formatı:** Email gövdesi düz metin olarak gönderiliyor, HTML desteği yok.
-- **Mesaj üretimi kaydı:** Mesaj üretimi bitmeden sayfa kapatılırsa sonuç kayboluyor ve sayfaya dönüldüğünde yeniden üretiliyor.
