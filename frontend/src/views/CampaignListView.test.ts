@@ -228,6 +228,20 @@ describe('CampaignListView', () => {
     expect(w.get('[data-test="empty"]').text()).toContain('Bu filtrede kampanya yok')
   })
 
+  it('says the filter is invalid without naming the API parameter', async () => {
+    fakeFetch({
+      'GET /api/campaigns?from=2026-13-45': () => ({
+        status: 400,
+        json: { error: 'invalid_query', message: 'from bir gün olmalı (YYYY-AA-GG).' },
+      }),
+    })
+    const w = await mountView('/campaigns?baslangic=2026-13-45')
+    await flushPromises()
+    const alert = w.get('[role="alert"]').text()
+    expect(alert).toBe('Filtre geçersiz. Kampanya numarasını ve tarihleri kontrol edin.')
+    expect(alert).not.toContain('from')
+  })
+
   it('reads the filter from the URL and follows it when the URL changes', async () => {
     const c = fakeFetch({
       'GET /api/campaigns?status=approved%2Csending%2Ccompleted': () => page([sentItem]),

@@ -31,7 +31,12 @@ const status = computed(() => {
   return PHASE_LABELS[gen.value.phase]
 })
 
+// While a new message streams in, the saved message's validation (errors,
+// worst case) belongs to text that is no longer on screen.
+const statsStale = computed(() => dirty.value || running.value)
+
 function errorsFor(field: MessageField): Issue[] {
+  if (running.value) return []
   if (dirty.value) return gen.value.phase === 'invalid' ? gen.value.issues.filter((i) => i.path === field) : []
   return validation.value?.errors.filter((e) => e.path === field) ?? []
 }
@@ -91,7 +96,7 @@ const preview = (t: string) => splitVariables(renderPreview(t, SAMPLE))
               :caret="gen.current === 'sms'"
               :editable="editable"
               :stats="validation?.stats.sms"
-              :stats-stale="dirty"
+              :stats-stale="statsStale"
               :errors="errorsFor('sms')"
               @update="(v) => editor.edit('sms', v)"
             />
@@ -115,7 +120,7 @@ const preview = (t: string) => splitVariables(renderPreview(t, SAMPLE))
               :caret="gen.current === f"
               :editable="editable"
               :stats="validation?.stats[f]"
-              :stats-stale="dirty"
+              :stats-stale="statsStale"
               :errors="errorsFor(f)"
               @update="(v) => editor.edit(f, v)"
             />

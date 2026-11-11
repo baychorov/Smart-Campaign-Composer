@@ -278,6 +278,7 @@ async function approve() {
   font-size: var(--text-lg);
   color: var(--ink);
   max-width: 90ch;
+  overflow-wrap: anywhere; /* a long URL in the brief must not widen the page */
 }
 .workspace {
   display: grid;

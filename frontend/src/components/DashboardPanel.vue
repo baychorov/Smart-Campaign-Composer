@@ -32,7 +32,11 @@ const stream = useEventStream({
     if (p.status === 'draft') {
       stream.close()
       emit('reload')
+      return
     }
+    // The page header shows the campaign's status; keep it in step with the
+    // live state (approved/scheduled → sending → completed).
+    if (p.status !== props.campaign.status) emit('update', { ...props.campaign, status: p.status })
   },
 })
 

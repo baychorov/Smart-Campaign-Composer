@@ -56,7 +56,11 @@ async function load(more = false) {
     nextBefore.value = page.next_before
     pages = more ? pages + 1 : 1
   } catch (e) {
-    if (token === listToken) error.value = toApiError(e).message
+    if (token !== listToken) return
+    const err = toApiError(e)
+    // The API names the query parameter ("from bir gün olmalı…"); the
+    // marketer sees the filter, not the parameter.
+    error.value = err.code === 'invalid_query' ? 'Filtre geçersiz. Kampanya numarasını ve tarihleri kontrol edin.' : err.message
   } finally {
     if (token === listToken) loading.value = false
   }
@@ -613,6 +617,7 @@ h1 {
   background: var(--accent-soft);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere; /* a long URL in the brief must not widen the page */
 }
 .small {
   font-size: var(--text-sm);

@@ -82,10 +82,13 @@ describe('CampaignView', () => {
     expect(w.find('[data-test="channel-sms"]').exists()).toBe(true)
     expect(w.find('[data-test="channel-email"]').exists()).toBe(false)
     expect(w.text()).toContain('izin geri çekildi')
+    // The header follows the live status, not the one from the approval.
+    expect(w.get('[data-test="status"]').text()).toBe('Gönderiliyor')
 
     es.emit('progress', progress({ status: 'completed', done: true }))
     await flushPromises()
     expect(w.get('[data-test="dash-status"]').text()).toContain('Tamamlandı')
+    expect(w.get('[data-test="status"]').text()).toBe('Tamamlandı')
     expect(es.closed).toBe(true)
   })
 
@@ -438,6 +441,29 @@ describe('CampaignView', () => {
     expect(mail).toContain('Merhaba Ayşe,')
     expect(mail).toContain('{{city}} için indirim.')
     expect(w.text()).not.toContain('İstanbul için')
+  })
+
+  it('hides the saved message\'s errors while a new message is generated', async () => {
+    const stats = { ...validValidation.stats, sms: { runes: 160, worst_case_runes: 164, limit: 160 } }
+    const errors = [{ path: 'sms', code: 'too_long', message: 'en kötü durumda 164 karakter' }]
+    const draft = makeCampaign({ message: goodMessage, content_validation: { valid: false, errors, stats } })
+    fakeFetch({
+      'GET /api/campaigns/7': () => ({ json: { campaign: draft } }),
+      'POST /api/campaigns/7/content/generations': () => ({ status: 202, json: { id: 'G2', events_url: '' } }),
+    })
+    const w = mountView()
+    await flushPromises()
+    expect(w.text()).toContain('164 karakter')
+    expect(w.get('[data-test="counter-sms"]').classes()).toContain('over')
+
+    await w.findAll('button').find((b) => b.text() === 'Yeniden üret')!.trigger('click')
+    await flushPromises()
+    const es = FakeEventSource.last()
+    es.emit('started', {})
+    es.emit('sms.delta', { text: 'Merhaba' })
+    await flushPromises()
+    expect(w.text()).not.toContain('164 karakter')
+    expect(w.get('[data-test="counter-sms"]').classes()).not.toContain('over')
   })
 
   it('still turns the counter red when the worst case is over the limit', async () => {
